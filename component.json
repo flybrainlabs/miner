@@ -1,7 +1,7 @@
 {
   "schema": "flybrain-component-v1",
   "repository": "miner",
-  "owner": "flybrainwork",
+  "owner": "flybrainlabs",
   "workspaceFiles": {
     "crates/sim-core/Cargo.toml": "crates/sim-core/Cargo.toml",
     "crates/sim-core/examples/full_draft.rs": "crates/sim-core/examples/full_draft.rs",
@@ -138,5 +138,6 @@
     "web/vendor/three/three.core.min.js": "web/vendor/three/three.core.min.js",
     "web/vendor/three/three.module.min.js": "web/vendor/three/three.module.min.js",
     "web/work-meter.mjs": "web/work-meter.mjs"
-  }
+  },
+  "project": "flybrainlabs"
 }
