@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {validateDeployment,assertServiceIdentity} from '../web/mining-deployment.mjs';
+const d=JSON.parse(await readFile('web/data/mining-deployment-v1.json')),model=JSON.parse(await readFile('web/data/research-profiles/duration256-v1-dev/config.json'));
+const network=validateDeployment(d,model),service={networkId:d.networkId,authorityId:d.authorityId,campaignId:d.campaignId,environment:d.environment,modelIdentity:d.model,serviceCapabilities:d.capabilities,payment:false,rewards:false};
+assert.equal(assertServiceIdentity(network,service),service);
+for(const key of ['payment','rewards','requiredWallet','solana'])for(const value of [true,undefined])assert.throws(()=>validateDeployment({...d,capabilities:{...d.capabilities,[key]:value}},model),/unsupported/);
+for(const key of ['networkId','authorityId','campaignId','environment'])assert.throws(()=>assertServiceIdentity(network,{...service,[key]:'wrong'}),/identity/);
+for(const key of ['graphRoot','modelRoot','modelDataRoot','registryRoot','parameterProfileHash'])assert.throws(()=>assertServiceIdentity(network,{...service,modelIdentity:{...d.model,[key]:'wrong'}}),/model/);
+assert.throws(()=>validateDeployment({...d,model:{...d.model,parameterVersion:'unknown'}},model),/parameters/);
+assert.throws(()=>validateDeployment({...d,environment:'production',apiBase:''},model),/incomplete/);
+assert.equal(validateDeployment({...d,apiBase:''},model).apiBase,'','explicit development gateway only');
+console.log('Pinned deployment rejects unknown funding, Solana, identity, model/parameter and transport capabilities.');

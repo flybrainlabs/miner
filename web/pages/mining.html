@@ -1,0 +1,150 @@
+<link rel="stylesheet" href="/assets/research-app.css?v=explorer-20261012-r5">
+<div class="section-wrap research-app">
+  <nav class="miner-tabs" aria-label="Mining"><a href="/mining/" data-miner-view="experience">Mining</a><a href="/mining/?view=contributions" data-miner-view="contributions">My records</a><a href="/mining/?view=settings" data-miner-view="settings">Settings</a></nav>
+  <section id="miner-view-experience">
+    <div class="miner-workspace">
+    <section class="work-panel miner-primary-panel" aria-label="Mining console">
+      <div class="miner-step-tabs" role="tablist" aria-label="Mining stages">
+        <button id="miner-step-download" type="button" role="tab" aria-controls="miner-stage-download" aria-selected="true" aria-current="step" tabindex="0"><span class="miner-step-number">1</span><span>Download brain data</span></button>
+        <button id="miner-step-build" type="button" role="tab" aria-controls="miner-stage-build" aria-selected="false" tabindex="-1" disabled><span class="miner-step-number">2</span><span>Build brain model</span></button>
+        <button id="miner-step-mining" type="button" role="tab" aria-controls="miner-stage-mining" aria-selected="false" tabindex="-1" disabled><span class="miner-step-number">3</span><span>Start mining</span></button>
+      </div>
+      <div class="miner-top-progress" aria-label="Current stage progress">
+        <div class="job-status miner-stage-status"><span id="miner-status" role="status" aria-live="polite">Checking this browser…</span><span id="miner-session-count" class="mono"></span><span id="research-percent" class="mono"></span></div>
+        <div id="miner-preparation-progress">
+      <strong id="research-state" hidden>Model readiness</strong><progress id="research-progress" max="100" aria-label="Current preparation stage"></progress><p id="research-detail" class="field-note"></p>
+        </div>
+        <div id="miner-live-progress" hidden>
+        <div class="job-status"><span id="miner-compute-stage"></span><span id="miner-compute-percent" class="mono"></span></div><progress id="miner-compute-progress" max="256" value="0" aria-label="Simulation progress"></progress><p id="miner-compute-steps"></p>
+        </div>
+        <p id="miner-step-note" class="field-note" role="status"></p>
+      </div>
+      <section id="miner-preparation" class="miner-preparation">
+        <section id="miner-stage-download" role="tabpanel" aria-labelledby="miner-step-download" tabindex="0">
+          <p id="miner-preparation-summary" role="status"></p>
+          <div id="miner-download-list" class="miner-download-list"></div>
+      <details id="miner-preparation-details"><summary>Data preparation details</summary><p id="miner-storage-note"></p>
+        <p id="miner-import-explanation" hidden>Browser reading of the official source is unavailable. Import the missing official files; saved blocks remain reusable.</p><details id="miner-import-fallback"><summary>Import files already downloaded</summary><label class="miner-drop" id="miner-drop" for="miner-files"><strong>Select or drop the official files</strong><input id="miner-files" type="file" multiple accept=".feather"><span>File sizes identify candidates. Contents are checked once after all files are ready.</span></label><ul id="miner-import-status" aria-live="polite"></ul></details>
+      </details>
+        </section>
+        <section id="miner-stage-build" role="tabpanel" aria-labelledby="miner-step-build" tabindex="0" hidden>
+          <p id="miner-build-summary" role="status"></p>
+          <ol class="miner-stages" id="miner-stage-list"></ol><p id="research-cache-note" class="field-note"></p>
+        </section>
+      </section>
+      <section id="miner-stage-mining" role="tabpanel" aria-labelledby="miner-step-mining" tabindex="0" hidden>
+      <section id="miner-pending-outputs" class="miner-pending-outputs" aria-labelledby="miner-pending-title" hidden>
+        <h2 id="miner-pending-title">Recover computed results</h2>
+        <p>Retry saving here before continuing mining. Downloads keep the original computed bytes. Recovery does not start mining.</p>
+        <p class="field-note">If browser storage is full, download a backup and free device space before retrying. Keep saved model and result data.</p>
+        <div id="miner-pending-list"></div>
+      </section>
+      <section id="miner-computation" class="miner-computation" aria-label="Local simulation rate">
+        <div class="miner-current-metrics"><span class="metric-caption">Local simulation rate</span><strong id="miner-compute-neurons">—</strong><span class="metric-unit">neuron updates/s</span></div>
+        <div class="console-round"><div><span>Current round</span><strong id="miner-current-round">—</strong></div><div><span>Round difficulty</span><strong id="miner-current-difficulty">—</strong></div></div>
+        <details id="miner-compute-detail"><summary>Calculation details and log</summary><p id="miner-compute-rate-label"></p><p id="miner-model-time"></p><div class="miner-compute-metrics"><div><span>Synaptic additions/s</span><strong id="miner-compute-synapses">—</strong></div><div><span>Task elapsed</span><strong id="miner-compute-elapsed">—</strong></div><div><span>Estimated remaining simulation</span><strong id="miner-compute-remaining">—</strong></div></div><p id="miner-compute-model" class="field-note"></p><p id="miner-work-counts" class="field-note"></p><p>A/B combined. Counts include actual partial-step work; progress counts complete steps.</p><details id="miner-compute-log-details"><summary>Raw calculation log</summary><pre id="miner-compute-log" role="log" aria-live="off" tabindex="0"></pre><button id="miner-compute-export" class="button button-ghost" type="button">Download calculation log ↓</button></details></details>
+      </section>
+      <section class="thread-control"><label for="miner-threads">Mining threads <output id="miner-thread-requested" for="miner-threads">1</output></label><input id="miner-threads" type="range" min="1" max="1" step="1" value="1"><p id="miner-thread-state" class="field-note" role="status"></p><button id="miner-thread-retry" class="button button-ghost" type="button" hidden>Retry thread expansion</button></section>
+      <details id="miner-continuous"><summary>Stop and storage limits</summary><div class="miner-secondary-actions"><button id="miner-single" class="button button-ghost" type="button" hidden>Only one calculation</button><button id="miner-pause-now" class="button button-ghost" type="button" hidden>Pause mining</button><button id="miner-prepare-pause" class="button button-ghost" type="button" hidden>Pause preparation</button></div><p>Mining continues until you pause or a limit is reached. Only complete saved backgrounds and submission state survive a refresh.</p><div class="miner-limit-fields"><label for="miner-limit-count" hidden>Maximum tasks<input id="miner-limit-count" type="number" min="1" max="1024" value="1024"></label><label for="miner-limit-minutes">Timed stop (minutes; blank means unlimited)<input id="miner-limit-minutes" type="number" min="0.001" max="1440" step="any" value="" placeholder="Unlimited"></label><label for="miner-limit-storage">New result storage budget (MiB)<input id="miner-limit-storage" type="number" min="1" max="20480" value="1024"></label><label id="miner-fee-limit-field" for="miner-fee-limit" hidden>Account funding limit (SOL)<input id="miner-fee-limit" type="text" inputmode="decimal" value="0.1"></label></div><div id="miner-run-actions" hidden><button id="miner-pause-after" class="button button-ghost" type="button">Stop after this round</button><button id="miner-stop" class="button button-ghost" type="button">Stop mining</button></div></details>
+      <details id="miner-executions"><summary>Thread details</summary><div id="miner-execution-list"></div><p id="miner-thread-reason"></p></details><details id="miner-task" hidden><summary id="miner-task-title">Current candidate</summary><p id="miner-task-description"></p><p id="miner-task-progress"></p></details>
+      </section>
+      <div class="miner-main-actions"><button id="miner-primary" class="button button-light" type="button" disabled>Start mining</button></div>
+      <p id="miner-guidance"></p><p id="miner-start-estimate" class="field-note"></p><p id="miner-session-budget" class="field-note"></p>
+      <p id="miner-error" class="miner-error" role="status" hidden></p><details id="miner-diagnostics" hidden><summary>Diagnostics</summary><pre id="miner-error-detail"></pre></details>
+    </section>
+  <section id="research-response" class="work-panel research-response anatomy-workbench">
+    <div class="anatomy-toolbar"><div class="anatomy-actions"><button id="anatomy-overview" class="button button-ghost" type="button">Brain</button><button id="anatomy-whole" class="button button-ghost" type="button">Whole CNS</button><button id="anatomy-focus" class="button button-ghost" type="button">Focus</button><button id="anatomy-reset" class="button button-ghost" type="button">Reset</button><button id="anatomy-fullscreen" class="button button-ghost" type="button">Fullscreen</button>
+    <details id="anatomy-display-settings" class="display-settings"><summary>Display settings</summary><div class="display-settings-panel"><label for="anatomy-outline"><input id="anatomy-outline" type="checkbox" checked>Brain outline</label><label for="anatomy-opacity">Outline opacity<input id="anatomy-opacity" type="range" min="0" max="0.6" step="0.01" value="0.3"></label><label for="anatomy-quality">Display quality<select id="anatomy-quality"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option></select></label><label for="anatomy-rotate"><input id="anatomy-rotate" type="checkbox" checked>Slow rotation</label><button id="anatomy-retry" class="button button-ghost" type="button">Retry display resources</button>
+    <label class="anatomy-display-toggle" for="miner-graphics"><input id="miner-graphics" type="checkbox" checked>Display graphics<span class="field-note">Turn off to leave more resources for computation.</span></label></div></details></div></div>
+    <div class="anatomy-heading"><span id="anatomy-view-state" role="status">MaleCNS anatomy</span><span id="anatomy-state" role="status">Real anatomy · model propagation</span></div>
+    <p id="anatomy-error" class="goal-detail" role="status" hidden></p>
+    <div class="propagation-stage"><p id="anatomy-loading" role="status" hidden>Loading brain view</p><p id="anatomy-disabled" class="anatomy-disabled" role="status" hidden>Graphics off · computation continues</p><div id="anatomy-stage" tabindex="0" role="img" aria-label="3D MaleCNS brain and ventral nerve cord; drag to rotate, shift-drag to pan, pinch or scroll to zoom"></div><canvas id="propagation-canvas" tabindex="0" role="img" aria-label="Current complete model state and recent confirmed events"></canvas></div>
+    <p id="propagation-activity" class="field-note"></p><p id="propagation-outside" class="field-note" hidden></p>
+    <div class="propagation-controls"><label for="research-live-mode">Current A/B view<select id="research-live-mode"><option value="a">Control A</option><option value="b" selected>Stimulus B</option><option value="difference">A/B comparison</option></select></label></div><p id="research-frame" class="mono"></p>
+    <details id="anatomy-information"><summary>Sources and model scope</summary><p id="propagation-identity" class="field-note"></p><p id="propagation-scope" class="field-note"></p><p id="anatomy-coverage" class="field-note"></p><p>Official anatomy in 8 nm voxels. Morphology-guided pulses follow real SWC chains. Without official synapse pairs, source and target paths remain separate. This point-neuron model does not compute branch voltage.</p><p class="propagation-legend">White ribbons: recent confirmed activity · A/B view selects a lane · signed current remains in the inspector</p><p class="field-note">Short display envelopes use received events only. Source and target morphology paths stay separate; no synapse position is inferred.</p><p id="propagation-motion-note" class="field-note"></p>
+    </details><details id="propagation-inspector" hidden><summary>Selected neuron or connection</summary><div class="propagation-controls"><label for="propagation-cell">Cell<select id="propagation-cell"></select></label><label for="propagation-edge">Model connection<select id="propagation-edge"></select></label></div><pre id="propagation-detail" tabindex="0"></pre></details>
+    <details><summary>Live observation diagnostics</summary><pre id="live-observation-diagnostics"></pre><p id="propagation-limits" class="field-note">Full scientific archives do not use display sampling.</p></details>
+
+  </section>
+
+    </div>
+    <p id="miner-new-result" role="status" hidden><button id="miner-show-result" class="button button-ghost" type="button">New saved results are available. View latest</button></p>
+    <section id="miner-competition" class="work-panel"><h2>Network and this round</h2><div class="miner-overview"><div><span>Network simulation rate · self-reported</span><strong id="miner-network-rate">—</strong><span id="miner-network-rate-note"></span></div><div><span>Round elapsed</span><strong id="miner-round-elapsed">—</strong><span id="miner-submit-stage"></span></div><div><span>Network state</span><p id="miner-network-statistics"></p></div></div><p id="miner-supply-state"></p><p id="miner-round-outcome"></p><h3>My submissions</h3><pre id="miner-own-candidates"></pre><details><summary>Round history</summary><div id="miner-round-history"></div><button id="miner-round-history-next" type="button" class="button button-ghost">Older rounds</button></details><details><summary>Signed statistics and events</summary><pre id="miner-network-stats-detail"></pre><ol id="miner-competition-events"></ol></details></section>
+    <section class="miner-rule-layer"><details id="miner-target-card" class="work-panel goal-card"><summary>Round rules and difficulty</summary><div class="job-status"><strong id="miner-target-state" role="status">Synchronizing target</strong><span id="miner-target-round" class="mono"></span></div><h2 id="miner-target-title"></h2><p id="miner-difficulty-state"></p><button id="miner-target-sync" class="button button-ghost" type="button">Refresh network state</button><p id="miner-goal-progress" role="status"></p><details><summary>Scientific goal and frozen round</summary><pre id="miner-target-details"></pre></details></details><details class="work-panel"><summary>Model and calculation scope</summary><p id="miner-profile-note"></p><p id="miner-goal-detail"></p><p id="miner-mode"></p><p>Fruit-fly connectome and a specified neuron model; simulations are model predictions, not biological measurements.</p><a href="/whitepaper/">Model assumptions and protocol</a></details></section>
+  </section>
+  <section id="miner-view-contributions" hidden><section id="miner-artifact-panel" class="work-panel"><h2>Selected result</h2><p id="miner-result-summary"></p><p id="research-identity" class="mono"></p><p id="artifact-verification"></p>    <details id="miner-result-details" hidden><summary>Result details and downloads</summary><div class="research-metrics"><div><span>A spikes</span><strong id="research-a">—</strong></div><div><span>B spikes</span><strong id="research-b">—</strong></div><div><span>A active cells</span><strong id="research-active-a">—</strong></div><div><span>B active cells</span><strong id="research-active-b">—</strong></div><div><span>Response bytes</span><strong id="research-bytes">—</strong></div></div><h3>Whole-population B−A over 32 time bins</h3><div id="research-bins" class="research-bins"></div><p id="research-waveform" class="field-note"></p><div class="table-scroll"><table><thead><tr><th>Body ID</th><th>B−A spikes</th><th>First different step</th></tr></thead><tbody id="research-top"></tbody></table></div><p id="research-result-hash" class="mono"></p><button id="research-download" class="button button-ghost" type="button">Download full spike-event archive ↓</button><button id="research-bundle" class="button button-ghost" type="button">Export scientific background and sampled trace ↓</button><button id="propagation-trace-export" class="button button-ghost" type="button">Export local propagation trace ↓</button></details></section><section id="miner-goal-results"><h1>My records</h1><p>Saving, local qualification, independent replay and winning are separate states.</p><label for="miner-goal-filter">Search all candidate records<input id="miner-goal-filter" type="search" placeholder="Candidate, round, goal or state"></label><div id="miner-goal-result-list" class="research-history"></div><button id="miner-goal-prev" class="button button-ghost" type="button">Previous candidates</button><span id="miner-goal-page"></span><button id="miner-goal-next" class="button button-ghost" type="button">Next candidates</button></section><div id="miner-v1-results"><header class="page-heading"><h1>My contributions</h1><p>Saved scientific results and local traces are separate from accepted chain contributions. Select a profile to view its original task catalog.</p></header><label for="miner-history-profile">Recorded research batch</label><select id="miner-history-profile"></select><p id="miner-contribution-mode"></p><div id="miner-contribution-counts" class="miner-counts"></div><p id="miner-contribution-note" role="status"></p><div id="miner-contribution-list" class="research-history"></div><button id="miner-contribution-prev" class="button button-ghost" type="button">Previous results</button><button id="miner-contribution-next" class="button button-ghost" type="button">Next results</button></div></section>
+  <section id="miner-submission" class="work-panel" hidden><h2>Submit and track your result</h2><p id="miner-submission-state" role="status" aria-live="polite"></p><div id="miner-wallet-picker"><label for="miner-wallet">Compatible Solana wallet</label><select id="miner-wallet"></select><button id="miner-connect" class="button button-ghost" type="button">Connect wallet</button></div><p id="miner-beneficiary" class="mono"></p><p id="miner-funding-quote"></p><p>Each transaction or archive signature requires explicit wallet authorization.</p><button id="miner-submit" class="button button-light" type="button" disabled>Submit result</button><button id="miner-reconcile" class="button button-ghost" type="button">Reconcile status</button><p id="miner-submission-error" class="field-note" role="status"></p><button id="miner-refund" class="button button-ghost" type="button" hidden>Refund eligible balance</button><button id="miner-claim" class="button button-ghost" type="button" hidden>Claim available test entitlement</button><details><summary>Submission recovery details</summary><p>Keep saved results and submission secrets until reconciliation finishes.</p><button id="miner-close" class="button button-ghost" type="button" hidden>Close eligible temporary receipt</button></details></section>
+  <section id="miner-view-settings" hidden><header class="page-heading"><h1>Settings</h1><p>Model data, recorded results and submission recovery are separate.</p></header><section class="work-panel"><h2>Model storage</h2><a class="button button-ghost" href="/mining/?view=tools">Advanced tools</a><p id="miner-settings-storage"></p><button id="miner-release" class="button button-ghost" type="button">Release model memory</button><button id="miner-clear-model" class="button button-ghost" type="button">Clear saved model only</button><button id="miner-clear-inputs" class="button button-ghost" type="button">Clear official input cache only</button><p>These actions keep results, reveal secrets and wallet state.</p><label for="miner-events"><input id="miner-events" type="checkbox">Keep local flow diagnostics</label><button id="miner-export-diagnostics" class="button button-ghost" type="button">Export local flow summary</button></section></section>
+  <section id="miner-view-tools" hidden><header class="page-heading"><h1>Advanced tools</h1><p>Advanced controls share the same checked model and submission controller. Editing a selection never changes an already running task.</p></header>
+  <button id="research-recompute-viewed" class="button button-ghost" type="button" disabled>Recompute viewed historical result</button><div class="research-columns">
+    <section class="work-panel">
+      <div class="panel-heading"><span class="section-number">01</span><div><h2>Prepare model files</h2><p>Only exact checked MaleCNS v1.0 development artifacts are accepted.</p></div></div>
+      <p class="field-note">Expected: <code>graph-v1.bin</code> (207,147,588 bytes) and <code>model-v0.bin</code> (660,532 bytes). Generated files remain on your device. An optional local cache can restore them after a refresh when browser storage permits.</p>
+      <label for="research-graph">Full anatomical graph</label><input id="research-graph" type="file" accept=".bin,application/octet-stream">
+      <label for="research-model">Versioned model metadata</label><input id="research-model" type="file" accept=".bin,application/octet-stream">
+      <button id="research-prepare" class="button button-light" type="button">Check and load in browser →</button>
+      <button id="research-restore" class="button button-ghost" type="button" hidden>Use cached model</button>
+      <button id="research-cancel" class="button button-ghost" type="button" hidden>Stop current operation</button>
+      <p id="research-tools-cache-note" class="field-note">Optional OPFS cache is versioned. Restoring always rechecks both full files; storage eviction requires reimport.</p>
+      <div class="job-status"><strong id="research-tools-state" role="status">Not prepared</strong><span id="research-tools-percent" class="mono">—</span></div>
+      <progress id="research-tools-progress" max="100" value="0" aria-label="Preparation progress"></progress>
+      <p id="research-tools-detail" class="field-note">The experiment stays unavailable until both complete files pass SHA-256 checks.</p>
+      <p id="research-capabilities" class="field-note"></p>
+    </section>
+    <section class="work-panel">
+      <div class="panel-heading"><span class="section-number">02</span><div><h2>Run aIPg10 A/B</h2><p>Four distinct official cells; each stimulus enters one real target cell.</p></div></div>
+      <label for="research-cell">Target neuron</label>
+      <select id="research-cell">
+        <option value="16789">aIPg10 · R · body 16789</option>
+        <option value="16961">aIPg10 · L · body 16961</option>
+        <option value="18708">aIPg10 · R · body 18708</option>
+        <option value="87973">aIPg10 · L · body 87973</option>
+      </select>
+      <label for="research-stimulus-index">Standard input (0–63)</label>
+      <input id="research-stimulus-index" type="number" min="0" max="63" step="1" value="31">
+      <label for="research-repeat-index">Repeat sample (0–3)</label>
+      <input id="research-repeat-index" type="number" min="0" max="3" step="1" value="0">
+      <p id="research-catalog-detail" class="field-note">Loading the finite development task catalog…</p>
+      <p class="field-note">Every task runs the full draft model. Conditions and seed come from the checked catalog. A local run is unverified; test campaign credit requires complete replay and chain acceptance.</p>
+      <button id="research-run" class="button button-light" type="button" disabled>Run complete A/B experiment →</button>
+      <p id="research-run-state" class="field-note" role="status">Model data required.</p>
+    </section>
+  </div>
+  <section class="work-panel research-response"><h2>Cell coverage and task conditions</h2>
+    <p id="research-coverage" class="field-note">No confirmed activity is assumed from local computations.</p>
+    <div id="research-cell-progress" class="research-cell-progress"></div>
+    <p id="research-matrix-note" class="field-note"></p><div class="table-scroll"><table id="research-matrix"><thead></thead><tbody></tbody></table></div>
+    <button id="research-matrix-prev" class="button button-ghost" type="button">Previous conditions</button><button id="research-matrix-next" class="button button-ghost" type="button">Next conditions</button>
+  </section>
+  <section class="work-panel research-response"><h2>Response library</h2>
+    <label for="research-filter">Show responses</label><select id="research-filter"><option value="cell">Selected cell</option><option value="all">All cells</option><option value="mine">My contributions</option></select>
+    <p id="research-history-note" class="field-note">Local entries remain unverified. Archived entries are reconstructed from permanent chain records and checked previews.</p>
+    <div id="research-history" class="research-history"></div><button id="research-history-prev" class="button button-ghost" type="button">Previous responses</button><button id="research-history-next" class="button button-ghost" type="button">Next responses</button>
+    <button id="research-compare" class="button button-ghost" type="button">Compare cells for this input and repeat</button>
+    <div class="table-scroll"><table><thead><tr><th>Body ID</th><th>A spikes</th><th>B spikes</th><th>Verification</th></tr></thead><tbody id="research-comparison"></tbody></table></div>
+    <p class="field-note">Comparison uses the same input and repeat index. Each TaskID has its own frozen background seed; these are model predictions, not causal measurements.</p>
+  </section>
+  <section id="research-chain-tools" class="work-panel research-response" hidden><h2>Development campaign</h2><p id="research-chain-state" class="field-note">Loading explicit network configuration…</p>
+    <label for="research-wallet">Solana wallet</label><select id="research-wallet"><option value="">Choose an available wallet</option></select>
+    <button id="research-connect" class="button button-ghost" type="button" disabled>Connect Solana wallet</button>
+    <p id="research-chain-quote" class="field-note"></p><button id="research-commit" class="button button-ghost" type="button" disabled>Commit this result</button>
+    <button id="research-reveal" class="button button-ghost" type="button" disabled>Reveal checked result</button>
+    <button id="research-chain-refresh" class="button button-ghost" type="button" disabled>Read chain status</button>
+    <button id="research-upload" class="button button-ghost" type="button" disabled>Archive checked response</button>
+    <label for="research-submission">My submissions</label><select id="research-submission"><option value="">No submission selected</option></select>
+    <p id="research-submission-state" class="field-note"></p>
+    <button id="research-finalize" class="button button-ghost" type="button" disabled>Confirm verified task</button>
+    <button id="research-close" class="button button-ghost" type="button" disabled>Close temporary receipt</button>
+    <button id="research-refund" class="button button-ghost" type="button" disabled>Refund eligible balance</button>
+    <button id="research-seal" class="button button-ghost" type="button" disabled>Seal completed cell</button>
+    <button id="research-end" class="button button-ghost" type="button" disabled>Finish eligible campaign</button>
+    <button id="research-tge" class="button button-ghost" type="button" disabled>Issue test tokens after success</button>
+    <label for="research-claim-pool">Test entitlement pool</label><select id="research-claim-pool"><option value="miner">Miner</option><option value="v0">Verifier 1</option><option value="v1">Verifier 2</option><option value="v2">Verifier 3</option><option value="community">Community</option></select>
+    <button id="research-claim" class="button button-ghost" type="button" disabled>Claim remaining test entitlement</button>
+    <p id="research-my-contribution" class="field-note"></p>
+    <p class="field-note">Test campaign entitlements become claimable only after every frozen task is accepted and archived. This page never enables a mainnet transaction.</p>
+    <p class="field-note">On success, accepted storage principal follows the frozen development-fund rule; unused advance stays refundable. On failure or a losing attempt, eligible principal and unused advance go to the fixed refund recipient. Declared services already performed are not refunded.</p>
+  </section>
+  </section>
+</div>
+<script type="module" src="/assets/research-app.mjs?v=explorer-20261012-r2"></script>

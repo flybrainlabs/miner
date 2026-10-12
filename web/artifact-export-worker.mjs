@@ -1,0 +1,2 @@
+import { zipSync } from '/assets/vendor/generated/archive-zip.mjs';
+self.onmessage=async({data:{files}})=>{try{const bytes={};for(const f of files){if(!/^[a-zA-Z0-9_./-]+$/.test(f.name)||f.name.includes('..')||bytes[f.name])throw new Error('Export path');bytes[f.name]=f.data instanceof Blob?new Uint8Array(await f.data.arrayBuffer()):new Uint8Array(f.data);}const zip=zipSync(bytes,{level:0});self.postMessage({bytes:zip.buffer},[zip.buffer]);}catch(e){self.postMessage({error:e.message});}};

@@ -1,0 +1,15 @@
+[
+  {"nonempty":false,"status":0,"revealDeadline":10,"verifyDeadline":20,"now":0,"blocks":false},
+  {"nonempty":false,"status":2,"revealDeadline":10,"verifyDeadline":20,"now":100,"blocks":false},
+  {"nonempty":true,"status":0,"revealDeadline":10,"verifyDeadline":20,"now":9,"blocks":true},
+  {"nonempty":true,"status":0,"revealDeadline":10,"verifyDeadline":20,"now":10,"blocks":true},
+  {"nonempty":true,"status":0,"revealDeadline":10,"verifyDeadline":20,"now":11,"blocks":false},
+  {"nonempty":true,"status":1,"revealDeadline":10,"verifyDeadline":20,"now":19,"blocks":true},
+  {"nonempty":true,"status":1,"revealDeadline":10,"verifyDeadline":20,"now":20,"blocks":true},
+  {"nonempty":true,"status":1,"revealDeadline":10,"verifyDeadline":20,"now":21,"blocks":false},
+  {"nonempty":true,"status":2,"revealDeadline":10,"verifyDeadline":20,"now":100,"blocks":true},
+  {"nonempty":true,"status":3,"revealDeadline":10,"verifyDeadline":20,"now":9,"blocks":false},
+  {"nonempty":true,"status":4,"revealDeadline":10,"verifyDeadline":20,"now":9,"blocks":false},
+  {"nonempty":true,"status":0,"revealDeadline":-10,"verifyDeadline":-1,"now":-10,"blocks":true},
+  {"nonempty":true,"status":1,"revealDeadline":-10,"verifyDeadline":-1,"now":0,"blocks":false}
+]

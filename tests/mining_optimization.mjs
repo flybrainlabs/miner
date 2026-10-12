@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { SessionPlan } from '../web/session-plan.mjs';
+import { deriveActions } from '../web/miner-state.mjs';
+import { preparationEvent, reducePreparationProgress } from '../web/preparation-progress.mjs';
+import { queueBlocks, eligibleIndices } from '../web/task-eligibility.mjs';
+import { ReplayController } from '../web/replay-controller.mjs';
+import { TraceIndex } from '../web/propagation-trace.mjs';
+const vectors=JSON.parse(fs.readFileSync('tests/fixtures/queue-blocks.json'));
+for(const v of vectors)assert.equal(queueBlocks({...v,submission:new Uint8Array(32).fill(v.nonempty?1:0)},v.now),v.blocks);
+const catalog={campaign:{targets:[{}],stimuli:[{},{}],repeats:2}},empty={submission:new Uint8Array(32),status:0,revealDeadline:10,verifyDeadline:20};
+const snapshot={state:{state:1},clock:{unixTimestamp:5},pages:[0,1,2,3].map(k=>({k,complete:false,queue:[empty]}))};
+assert.deepEqual(eligibleIndices(catalog,{snapshot,local:[{global_task_index:'0'}],pending:[{k:1,phase:'processing'}]}),[2,3]);
+assert.deepEqual(eligibleIndices(catalog,{snapshot:{...snapshot,state:{state:2}}}),[]);
+globalThis.localStorage={setItem(k,v){this.value=v;},getItem(){return this.value;}};let now=0;
+const plan=new SessionPlan({config:{campaign:'dev'},count:2,minutes:1,storageBytes:100,clock:()=>now});
+now=200000;assert.equal(plan.elapsedMs,0,'preparation does not use active budget');plan.activate();now+=10000;plan.suspend();now+=90000;assert.equal(plan.elapsedMs,10000);plan.activate();now+=50000;assert.equal(plan.limit,'time-limit');
+const restored=SessionPlan.restored();assert.equal(restored.launchIntent,false);assert(plan.accepts(plan.operationId));plan.invalidate();assert(!plan.accepts(plan.operationId));
+assert(!deriveActions({preparing:true,ready:true}).run);assert(!deriveActions({preparing:true}).import);assert(deriveActions({running:true,paused:true}).start);assert(!deriveActions({running:true,paused:true}).prepare);
+let progress={parents:{},sources:{}};for(const id of ['a','b'])progress=reducePreparationProgress(progress,preparationEvent('op','inputs',10,10,{sourceId:id,substage:'staged'}),'op');
+assert.equal(progress.sources.a.stages.staged.status,'completed');assert.equal(progress.parents.inputs.status,'active');assert.equal(reducePreparationProgress(progress,preparationEvent('old','ready',1,1),'op'),progress);
+const make=()=>new ReplayController({request:()=>1,cancel:()=>{},reducedMotion:()=>false});
+for(const interval of [5,16,100]){const replay=make();replay.load({steps:128});replay.play();replay.tick(0);for(let at=interval;at<1000;at+=interval)replay.tick(at);replay.tick(1000);assert(Math.abs(replay.time-2)<1e-10);replay.setSpeed(4);replay.tick(1500);assert(Math.abs(replay.time-6)<1e-10);replay.pause();replay.tick(100000);assert(Math.abs(replay.time-6)<1e-10);replay.seek(50);replay.stepBackward();assert.equal(replay.time,49);replay.stepForward();assert.equal(replay.time,50);replay.setMode('a');assert.equal(replay.time,50);replay.setWindow(10,20);assert.equal(replay.time,10);replay.play();replay.tick(0);replay.tick(50000);assert.equal(replay.time,10,'No catch-up leap after a stalled frame');for(let at=50100;at<=52000;at+=100)replay.tick(at);assert.equal(replay.time,19);assert(!replay.playing);assert.throws(()=>replay.setWindow(-1,20));}
+const live=make();live.load({steps:128,available:3,live:true});live.seek(100);assert.equal(live.time,2);live.setAvailable(5);live.seek(100);assert.equal(live.time,4);live.dispose();
+const reduced=new ReplayController({request:()=>{throw new Error('Reduced motion must not animate');},cancel:()=>{},reducedMotion:()=>true});reduced.load({steps:32});reduced.play();assert(!reduced.playing);reduced.stepForward();assert.equal(reduced.time,1);
+const trace={cells:[{index:0},{index:1}],steps:4,states:[[0,0,1,true],[1,1,1,true]],transfers:[[1,0,0,1,0,1,'2']]},index=new TraceIndex(trace);
+assert.equal(index.frame(.5).moving.length,1);assert.equal(index.frame(.5).arrived.length,0);assert.equal(index.frame(1).arrived.length,1);assert.equal(index.frame(1).states[1].lanes[0].row[3],true);trace.states.push([2,0,1,false]);index.append(trace);assert.equal(index.states.size,3);assert.equal(index.frame(2).moving.length,0);
+console.log('Shared queue vectors, eligibility, active budgets, unified actions, stale preparation IDs, replay clocks and incremental model-time indexes passed.');

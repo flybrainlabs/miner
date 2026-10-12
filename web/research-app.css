@@ -1,0 +1,240 @@
+.research-app { max-width: 1200px; margin: auto; padding-bottom: 5rem; }
+body[data-page="mining"] #wallet-link { display: none; }
+.research-app .page-heading { max-width: 880px; }
+.research-app .notice { margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px solid var(--line, #444); }
+.research-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.research-columns .work-panel { min-width: 0; }
+.research-columns label { display: block; margin: 1rem 0 .4rem; }
+.research-columns input[type=file], .research-columns select { max-width: 100%; width: 100%; }
+.research-columns .button { margin-top: 1.2rem; }
+.research-response { margin-top: 1.2rem; }
+.research-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .7rem; margin: 1.3rem 0; }
+.research-metrics div { border: 1px solid var(--line, #444); padding: .8rem; min-width: 0; }
+.research-metrics span { display: block; font-size: .8rem; opacity: .7; }
+.research-metrics strong { font-size: 1.15rem; overflow-wrap: anywhere; }
+.research-bins { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); align-items: end; height: 105px; gap: 2px; margin: 1.1rem 0 1.8rem; border-bottom: 1px solid currentColor; }
+.research-bins span { display: block; min-height: 2px; background: #eeeeee; }
+.research-response table { width: 100%; border-collapse: collapse; }
+.research-response td, .research-response th { padding: .5rem; border-bottom: 1px solid var(--line, #444); text-align: left; }
+.research-app .mono { overflow-wrap: anywhere; }
+.research-replay { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
+.research-skeleton { min-height: 320px; position: relative; }
+.research-skeleton canvas { max-width: 100%; width: 100%; }
+.research-app details { padding-bottom: 1.2rem; }
+.research-app input[type=range] { width: 100%; }
+.research-app label { display: block; margin: .8rem 0 .4rem; }
+.research-app select { max-width: 100%; }
+.research-app .button { white-space: normal; }
+.research-cell-progress, .research-history { display: grid; gap: .7rem; grid-template-columns: repeat(2, minmax(0,1fr)); margin: 1rem 0; }
+.research-history-card { border: 1px solid var(--line,#444); padding: 1rem; min-width: 0; }
+.research-task { border: 1px solid var(--line,#444); padding: .4rem; background: transparent; color: inherit; cursor: pointer; }
+.research-task[data-status=archived] { color: #eeeeee; }
+.research-task[data-status=accepted] { color: #cccccc; }
+.research-task[data-status=local] { color: #bbbbbb; }
+.research-skeleton img { width: 100%; max-height: 320px; object-fit: contain; }
+@media (max-width: 760px) { .research-columns { grid-template-columns: 1fr; } .research-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .research-replay { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .research-cell-progress, .research-history { grid-template-columns: 1fr; } }
+/* Ordinary miner flow. Research controls share the same controllers in another view. */
+.research-app [hidden] { display:none !important; }
+.miner-tabs { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; padding:1.1rem 0 1.7rem; border-bottom:1px solid var(--line,#333); margin-bottom:2.1rem; }
+.miner-tabs a { font-size:.88rem; padding:.5rem 0; text-decoration:none; }
+.miner-tabs [aria-current=page] { border-bottom:2px solid currentColor; }
+.miner-heading h1 { font-size:clamp(2rem,5vw,3.8rem); max-width:820px; line-height:1.08; }
+.miner-heading p { max-width:720px; }
+body[data-page="mining"] .miner-heading { padding:1rem 0 .6rem; }
+body[data-page="mining"] .miner-heading h1 { margin:0 0 .8rem; }
+.miner-tabs { margin-bottom:1rem; padding-bottom:.8rem; }
+body[data-page="mining"] .miner-heading .field-note { font-size:.8rem; line-height:1.5; margin-top:.5rem; }
+.miner-primary-panel { margin:1.6rem 0; padding:clamp(1rem,3vw,2rem); }
+.miner-primary-panel h2 { font-size:clamp(1.2rem,3vw,1.7rem); }
+.miner-main-actions { display:flex; flex-wrap:wrap; gap:.7rem; margin-top:1.3rem; }
+.miner-science-note { margin: .8rem 0 0; }
+.research-app .button { min-height:44px; min-width:44px; margin:.4rem .35rem .4rem 0; max-width:100%; }
+.research-app input:not([type=checkbox]):not([type=range]), .research-app select { min-height:44px; max-width:100%; padding:.6rem; }
+.miner-stages { list-style:none; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.6rem; padding:0; counter-reset:stage; }
+.miner-stages li { counter-increment:stage; border-top:2px solid #333; padding:.8rem 0; font-size:.85rem; }
+.miner-stages li::before { content:counter(stage) ' · '; }
+.miner-stages [data-active=true] { border-color:#eee; font-weight:bold; }
+.miner-drop { display:flex !important; flex-direction:column; gap:.8rem; padding:1rem; border:1px dashed #888; cursor:pointer; }
+.miner-drop span { font-size:.85rem; color:#bbb; }
+.miner-drop input { width:100%; }
+.miner-download-list { display:grid; gap:.65rem; margin:1rem 0; }
+.miner-download-list>div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.4rem; border-bottom:1px solid #333; padding:.4rem 0; }
+.miner-download-list a { overflow-wrap:anywhere; }
+.miner-download-list span { color:#aaa; font-size:.85rem; }
+.miner-download-list progress { flex-basis:100%; width:100%; height:.5rem; margin:.25rem 0; }
+.miner-limit-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+.miner-limit-fields input { width:100%; }
+.miner-task { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); align-items:center; gap:1rem; }
+.miner-task-anatomy { max-width:450px; min-height:150px; }
+.miner-task-anatomy img { display:block; width:100%; max-height:240px; object-fit:contain; }
+.miner-computation { margin:1.3rem 0; }
+.miner-computation h2 { margin:0; }
+.miner-compute-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.7rem; margin:1rem 0; }
+.miner-compute-metrics>div { border:1px solid #444; padding:1rem; min-width:0; }
+.miner-compute-metrics span { display:block; font-size:.8rem; color:#aaa; margin-bottom:.65rem; }
+.miner-compute-metrics strong { display:block; font-size:1.15rem; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+#miner-compute-log { max-height:18rem; min-height:6rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; background:#101010; border:1px solid #333; padding:.85rem; font-size:.78rem; line-height:1.65; }
+@media(max-width:800px) { .miner-compute-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:420px) { .miner-compute-metrics { grid-template-columns:1fr; } }
+.miner-counts { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:.7rem; margin:1.3rem 0; }
+.miner-counts>div { display:flex; flex-direction:column; gap:.5rem; border:1px solid #444; padding:1rem; }
+.miner-counts strong { font-size:1.7rem; }
+.miner-counts span { font-size:.9rem; }
+.miner-result-summary { font-size:1.15rem; line-height:1.6; }
+.miner-error { padding:1rem; border-left:3px solid #aaa; }
+#miner-error-detail { white-space:pre-wrap; overflow-wrap:anywhere; max-height:200px; overflow:auto; }
+.research-app>section, .research-app .work-panel, .research-history-card { min-width:0; overflow-wrap:anywhere; }
+.research-app .table-scroll { max-width:100%; overflow:auto; }
+.research-app progress { display:block; width:100%; height:12px; margin:1rem 0; }
+.research-app :focus-visible { outline:2px solid #eee; outline-offset:4px; }
+@media(max-width:600px) { .miner-tabs { gap:.3rem .8rem; } .miner-task { grid-template-columns:1fr; } .miner-limit-fields { grid-template-columns:1fr; } .miner-stages { gap:.3rem; } .miner-stages li { font-size:.75rem; } .miner-main-actions { display:grid; } .miner-main-actions .button { width:100%; } .research-app { padding-left:1rem; padding-right:1rem; } .research-skeleton { min-height:220px; } }
+@media(prefers-reduced-motion:reduce) { .research-app *, .research-app *::before, .research-app *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+@media(max-width:600px) {
+  body[data-page="mining"] .miner-heading h1 { font-size:1.8rem; line-height:1.13; }
+  .miner-tabs { padding:.6rem 0; margin-bottom:.6rem; }
+  .miner-primary-panel { margin:.8rem 0; }
+  .miner-primary-panel #miner-guidance { margin:.6rem 0; font-size:.9rem; line-height:1.5; }
+  .miner-main-actions { margin-top:.6rem; gap:.3rem; }
+}
+.miner-profile-bar { display:flex; align-items:center; gap:.7rem; flex-wrap:wrap; margin:.5rem 0; }
+.miner-profile-bar select { width:auto; max-width:100%; }
+body[data-page="mining"] .miner-heading { padding:1rem 0 .4rem; }
+body[data-page="mining"] .miner-heading h1 { font-size:clamp(1.6rem,3vw,2.6rem); margin:.4rem 0; }
+.miner-primary-panel { margin:1rem 0; }
+.miner-primary-panel h2 { font-size:clamp(1.1rem,2vw,1.4rem); margin:0; }
+.miner-primary-panel details, .miner-preparation details { margin:.8rem 0; }
+.miner-primary-panel .miner-computation { padding-top:1rem; }
+.miner-current-metrics { display:flex; flex-wrap:wrap; gap:.5rem 1.5rem; align-items:baseline; }
+.miner-current-metrics strong { color:#eeeeee; font-size:1.1rem; }
+.miner-profile-bar .field-note { margin:0; }
+.propagation-stage { width:100%; min-width:0; border:1px solid #333333; background:#111111; border-radius:8px; overflow:hidden; }
+.propagation-stage canvas { display:block; width:100%; max-width:100%; }
+.propagation-controls { display:flex; flex-wrap:wrap; gap:.6rem; align-items:end; margin:1rem 0; }
+.propagation-controls label { flex:1 1 140px; min-width:0; }
+.propagation-controls input, .propagation-controls select { width:100%; min-width:0; }
+.propagation-controls input[type="checkbox"] { width:auto; }
+#propagation-detail { max-height:260px; overflow:auto; white-space:pre-wrap; padding:1rem; background:#111111; }
+.propagation-legend { font-size:.8rem; line-height:1.5; }
+.research-bins [data-current="true"] { outline:2px solid #fff; outline-offset:3px; }
+.miner-stages [data-status="completed"] { color:#eeeeee; }
+.miner-stages [data-status="repairing"], .miner-stages [data-status="failed"] { color:#999999; }
+@media(max-width:600px) { .miner-profile-bar { display:grid; } .miner-profile-bar select { width:100%; } .propagation-controls .button { padding:.7rem .6rem; font-size:.8rem; } .propagation-controls label { flex-basis:120px; } .miner-current-metrics { gap:.3rem 1rem; } }
+.research-app #miner-view-experience > .work-panel { padding:1.25rem; margin:.75rem 0; }
+.research-app .miner-heading { margin-bottom:.25rem; }
+.research-app .miner-computation { margin:.5rem 0; }
+.research-app #research-response > h2 { font-size:1.4rem; margin:0 0 .5rem; }
+.research-app #research-response > p { margin:.4rem 0; }
+.research-app #research-response .propagation-controls { margin:.6rem 0; gap:.35rem; }
+.research-app #research-response .button { font-size:.85rem; padding:.6rem .7rem; }
+.research-app[data-preparation="ready"] .miner-preparation > .job-status { display:none; }
+.research-app #miner-preparation .miner-preparation-summary { margin:.4rem 0; }
+
+
+/* V2 target, local candidate phases and signed B−A chart. */
+.goal-card { grid-column:1 / -1; border-color:#555555; }
+.goal-card h2 { font-size:1.05rem; line-height:1.6; }
+.goal-card pre,.goal-result pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:.75rem; }
+.goal-result { padding:1rem; border:1px solid #444444; border-radius:.5rem; }
+.goal-result h3 { font-size:1rem; }
+.mining-mode-control { grid-column:1 / -1; max-width:100%; }
+.display-settings label { display:flex; align-items:center; gap:.5rem; margin:.5rem 0; flex-wrap:wrap; }
+.display-settings input[type=checkbox] { width:auto; }
+.display-settings input[type=range] { max-width:220px; }
+.research-bins { position:relative; align-items:stretch; border-bottom:0; }
+.research-bins::before { content:''; position:absolute; top:50%; left:0; right:0; border-top:1px solid #999999; pointer-events:none; }
+.research-bins .response-bin { padding:0; margin:0; border:0; background:transparent; position:relative; min-width:0; height:100%; }
+.research-bins .response-bin span { position:absolute; width:100%; min-height:0; background:#eeeeee; }
+.research-bins [data-sign=negative] { background:#999999; }
+.research-bins [data-sign=zero] { height:0; }
+#miner-target-card[hidden],#miner-v1-results[hidden],#miner-goal-results[hidden] { display:none; }
+
+/* Product layout follows DOM order: console/brain, statistics, rules. */
+body[data-page="mining"] { background:#0c0c0c; color-scheme:dark; }
+body[data-page="mining"] .research-app progress,body[data-page="mining"] .research-app input { accent-color:#eee; }
+body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"] #wallet-link { display:none; }
+.research-app { max-width:1480px; padding-top:.5rem; }
+#miner-view-experience { display:block; }
+.miner-workspace { display:grid; grid-template-columns:minmax(300px,420px) minmax(0,700px); align-items:start; justify-content:space-between; gap:1.3rem; }
+.research-app .miner-primary-panel,.research-app #research-response { margin:0; padding:1rem; border:1px solid #333333; border-radius:12px; background:#141414; min-width:0; }
+.miner-primary-panel h2 { font-size:1rem; margin:.5rem 0; }
+.miner-primary-panel p { font-size:.8rem; line-height:1.5; }
+.miner-current-metrics { display:flex; gap:.35rem; flex-direction:row; flex-wrap:nowrap; align-items:baseline; min-width:0; }
+.miner-current-metrics strong { flex-shrink:0; font-size:clamp(.95rem,1.5vw,1.35rem); color:#eeeeee; font-variant-numeric:tabular-nums; white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.miner-current-metrics span,.metric-caption { font-size:.78rem; color:#aaaaaa; }
+.miner-current-metrics .metric-caption { font-size:clamp(.68rem,1vw,.78rem); letter-spacing:0; text-transform:none; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.miner-current-metrics .metric-unit { flex-shrink:0; white-space:nowrap; }
+.console-round { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin:1rem 0; }
+.console-round span,.console-round strong { display:block; }
+.console-round span { font-size:.75rem; color:#a6a6a6; }
+.console-round strong { font-size:1.15rem; font-variant-numeric:tabular-nums; }
+.miner-main-actions #miner-primary { width:100%; margin:0; background:#eeeeee; color:#111111; }
+.thread-control label { display:flex; justify-content:space-between; font-size:.85rem; }
+.thread-control input { width:100%; min-height:44px; accent-color:#eeeeee; }
+#miner-preparation { background:none; border:0; padding:0; margin:.6rem 0; }
+.miner-step-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.4rem; margin:0 0 .6rem; }
+.miner-step-tabs button { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; min-width:0; min-height:80px; padding:.65rem .5rem; color:#aaa; border:1px solid #383838; background:#181818; font:inherit; font-size:.8rem; line-height:1.45; text-align:left; }
+.miner-step-tabs button[disabled] { opacity:1; cursor:default; }
+.miner-step-tabs button[aria-selected="true"] { color:#fff; background:#252525; border-color:#eee; }
+.miner-step-tabs button[data-status="complete"] { border-color:#777; color:#ccc; }
+.miner-step-number { display:flex; align-items:center; justify-content:center; width:1.6rem; height:1.6rem; border:1px solid currentColor; border-radius:50%; font-variant-numeric:tabular-nums; font-size:.85rem; }
+.miner-top-progress { margin-bottom:1rem; padding-bottom:.5rem; border-bottom:1px solid #383838; }
+.miner-top-progress .job-status { margin:0; }
+.miner-top-progress p:empty { display:none; }
+.miner-primary-panel .miner-computation { padding-top:0; }
+.miner-top-progress progress { width:100%; margin:.45rem 0; accent-color:#eee; }
+.miner-stage-panel[hidden],#miner-stage-download[hidden],#miner-stage-build[hidden],#miner-stage-mining[hidden],#miner-preparation-progress[hidden],#miner-live-progress[hidden] { display:none; }
+.miner-preparation .miner-download-list { margin:.8rem 0; }
+.miner-main-actions { margin-top:1rem; }
+.miner-pending-outputs { border:1px solid #888; border-radius:8px; padding:.75rem; margin:.5rem 0 1rem; background:#1b1b1b; }
+.miner-pending-outputs[hidden] { display:none; }
+.miner-pending-outputs .goal-result { padding:.5rem 0; margin:0; border:0; background:none; }
+.miner-pending-outputs .field-note { overflow-wrap:anywhere; }
+.miner-pending-outputs .miner-secondary-actions { flex-wrap:wrap; }
+.miner-overview { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
+.miner-overview > div { border:1px solid #333333; border-radius:8px; padding:1rem; min-width:0; }
+.miner-overview span,.miner-overview strong { display:block; }
+.miner-overview strong { font-size:1.4rem; margin:.75rem 0; font-variant-numeric:tabular-nums; }
+.miner-rule-layer { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.miner-rule-layer details { align-self:start; padding:1rem; }
+.anatomy-toolbar { position:relative; width:100%; }
+.anatomy-actions { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.2rem; align-items:start; }
+.research-app .anatomy-toolbar .button,.research-app .anatomy-toolbar summary { display:flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:44px; min-width:0; width:100%; font-size:.72rem; line-height:1.25; padding:.3rem .35rem; margin:0; text-align:center; }
+.research-app .anatomy-toolbar .display-settings { padding:0; margin:0; min-width:0; }
+.anatomy-toolbar summary { list-style:none; color:#ddd; border:1px solid #444; border-radius:0; }
+.anatomy-toolbar summary::-webkit-details-marker { display:none; }
+.anatomy-toolbar summary:hover,.anatomy-toolbar details[open] summary { background:#252525; border-color:#999; }
+.display-settings-panel { position:absolute; z-index:10; top:calc(100% + .4rem); right:0; width:min(330px,100%); max-height:min(65vh,480px); overflow:auto; padding:1rem; box-sizing:border-box; border:1px solid #555; border-radius:8px; background:#171717; box-shadow:0 12px 32px #0009; }
+.research-app .display-settings-panel label { font-size:.85rem; gap:.6rem; }
+.research-app .display-settings-panel .button { width:auto; margin:.5rem 0; }
+.display-settings-panel .field-note { flex-basis:100%; }
+.anatomy-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.3rem .7rem; margin:.6rem 0; color:#aaa; }
+#anatomy-state,#anatomy-view-state { font-size:.8rem; }
+/* Every visual mode occupies this one container. Only its layers are clipped. */
+.propagation-stage { position:relative; width:100%; aspect-ratio:3/4; min-width:0; min-height:0; overflow:hidden; background:radial-gradient(ellipse at 50% 45%,#202020 0%,#101010 72%); }
+#anatomy-stage,#propagation-canvas,#anatomy-disabled,#anatomy-loading { position:absolute; inset:0; width:100%; height:100%; min-width:0; min-height:0; margin:0; }
+#anatomy-stage { touch-action:none; cursor:grab; }
+#anatomy-stage:active { cursor:grabbing; }
+#anatomy-stage canvas { width:100%; height:100%; display:block; }
+#anatomy-disabled,#anatomy-loading { display:flex; align-items:center; justify-content:center; padding:1rem; color:#aaaaaa; text-align:center; box-sizing:border-box; }
+.propagation-stage:fullscreen { width:100vw; height:100vh; aspect-ratio:auto; border:0; }
+.research-app details { margin:.75rem 0; }
+.research-app summary { cursor:pointer; padding:.3rem 0; }
+.research-app pre { white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; max-height:24rem; overflow:auto; }
+#miner-own-candidates { max-height:14rem; }
+.research-app .job-status { flex-wrap:wrap; gap:.4rem; min-width:0; }
+.research-app p,.research-app strong,.research-app a { overflow-wrap:anywhere; }
+#miner-execution-list { display:grid; gap:.4rem; }
+#miner-execution-list .button { text-align:left; font-size:.8rem; }
+#miner-round-history { display:grid; gap:.5rem; }
+#miner-artifact-panel:has(#miner-result-details[hidden]) { display:none; }
+@media(min-width:1100px) and (max-height:850px) { .miner-workspace { grid-template-columns:minmax(320px,1fr) minmax(0,620px); gap:1rem; } }
+@media(max-width:950px) { .miner-workspace { grid-template-columns:minmax(0,1fr); } .miner-overview,.miner-rule-layer { grid-template-columns:minmax(0,1fr); } .research-app { padding-inline:1rem; } }
+@media(max-width:430px) { .research-app { padding-inline:.65rem; } .research-app .miner-primary-panel,.research-app #research-response { padding:.75rem; } .anatomy-actions { gap:.1rem; } .research-app .anatomy-toolbar .button,.research-app .anatomy-toolbar summary { font-size:.68rem; padding:.25rem .2rem; } .miner-tabs { gap:1rem; } }
+
+.miner-primary-panel #research-state { display:none; }
+.miner-stages li[hidden] { display:none; }
+
+#miner-stage-build .miner-stages { grid-template-columns:repeat(3,minmax(0,1fr)); }
+#miner-stage-build .miner-stages li::before { content:none; }

@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { ComputationMeter, ComputationLog, computationLogText } from '../web/computation.mjs';
+import { TaskRunner } from '../web/task-runner.mjs';
+import { createMinerState } from '../web/miner-state.mjs';
+let now=0;
+const task={taskId:'1'.repeat(64),k:124,bodyId:16789,stimulusIndex:31,repeatIndex:0};
+const meter=new ComputationMeter(task,{steps:32,neuron_count:3,directed_connection_count:2},()=>now);
+now=1000;assert.equal(meter.snapshot('validating').averageNeuronUpdatesPerSecond,null);
+assert.equal(meter.step(0,32,0n,0n,0n,0n).recentNeuronUpdatesPerSecond,null);
+now=1250;const first=meter.step(1,32,6n,1n,0n,1n);
+assert.equal(first.recentNeuronUpdatesPerSecond,24);assert.equal(first.averageNeuronUpdatesPerSecond,24);
+assert.equal(first.recentSynapseTransmissionsPerSecond,4);assert.equal(first.elapsedMs,1250);
+assert.equal(first.simulationMs,250);assert.equal(first.remainingSimulationMs,7750);
+now=1500;const second=meter.step(2,32,12n,2n,0n,2n);
+assert.equal(second.averageNeuronUpdatesPerSecond,24);assert.equal(second.remainingSimulationMs,7500);
+now=10000;const stopped=meter.snapshot('stopped');
+assert.equal(stopped.simulationMs,500);assert.equal(stopped.recentNeuronUpdatesPerSecond,null);
+assert.equal(stopped.remainingSimulationMs,null);assert.equal(stopped.averageNeuronUpdatesPerSecond,24);
+assert.throws(()=>meter.step(3,32,192n,4n,0n,3n),/work counters/,'never use a fictional completed-work count');
+assert.throws(()=>meter.step(1,32,6n,1n,0n,1n),/work counters/,'no backwards progress');
+const journal=new ComputationLog(3,()=>now),t=(s,v={})=>s.replace(/\{(\w+)\}/g,(_,k)=>v[k]??`{${k}}`);
+journal.append('task',task);journal.append('progress',{telemetry:first});journal.append('pause-requested');
+let text=computationLogText(journal.summary(),t);
+assert(text.includes(task.taskId));assert(text.includes('24 neuron updates/s'));assert(text.includes('Step 1/32'));
+journal.append('stopped');assert.equal(journal.summary().dropped,1);assert.equal(journal.summary().entries.length,3);
+assert.equal(journal.summary().latest,first);assert(!JSON.stringify(journal.summary()).includes('salt'));
+console.log('Measured simulation counters, timing denominators, ETA scope, stopped rates and bounded log export passed.');
+
+// Simulated storage boundary: completed science must finish saving even when
+// stop is requested. No subsequent task may be dispatched.
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{locks:{request:async(_name,_options,fn)=>fn({})}}});
+globalThis.localStorage={getItem:()=>null,setItem(){}};globalThis.document={hidden:false};
+let saving,finishSave;
+const entered=new Promise(resolve=>saving=resolve),blockedSave=new Promise(resolve=>finishSave=resolve);
+const validTask={...task,k:0};let preserved=0,runs=0;
+const flow=createMinerState(),runtime={workerId:'compute-primary',ready:true,release(){},request:async()=>{runs++;return {task:validTask,computation:meter.snapshot('results'),resultHash:'2'.repeat(64)};}};
+const runner=new TaskRunner({runtime,state:flow,config:{task_catalog_sha256:'3'.repeat(64)},catalog:{campaign:{targets:[{}],stimuli:[{}],repeats:1}},records:()=>[],save:async()=>{saving();await blockedSave;},onResult:async()=>{preserved++;},events:{emit(){}}});
+const operation=runner.start({task:validTask});await entered;runner.stopNow();finishSave();await operation;
+assert.equal(flow.value.execution.phase,'paused');assert.equal(flow.value.execution.telemetry.stage,'complete');
+assert.equal(runner.running,false);assert.equal(runs,1);assert.equal(preserved,1);assert(runner.computation.rows.some(r=>r.event==='complete'&&r.saved));
+console.log('Stopping during a delayed save preserves the completed result and dispatches no next task (storage boundary simulated).');
