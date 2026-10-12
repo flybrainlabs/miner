@@ -6,7 +6,7 @@ import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {resolve,join} from 'node:path';
 import {keyFile,request,verified,api} from '../tools/target_dev_identity.mjs';
-import {verifyJob} from '../tools/candidate_verifier_v2.mjs';
+import {verifyJob,getModelReadiness} from '../tools/candidate_verifier_v2.mjs';
 const dir=resolve('/workspace/.flypow-tools/live-current-v3-network'),base='http://127.0.0.1:8790',network=JSON.parse(await readFile(join(dir,'network-public.json'))),authorityId=network.authorityId,output=resolve(process.argv[2]||'data/prepared/live-current-v3/competition');await mkdir(output,{recursive:true});
 const report={schema:'flypow-v3-real-browser-competition',scope:'loopback preview only; controlled known test input; no new discoveries',physicalAndroid:false,independentVerifierOperators:false,officialDownloads:0,checks:[],replays:[]};
 const save=()=>writeFile(join(output,'report.json'),JSON.stringify(report,null,2)+'\n'),check=async s=>{report.checks.push(s);await save();console.log(JSON.stringify({passed:report.checks.length,check:s}));};
@@ -14,7 +14,7 @@ const a=JSON.parse(await readFile('data/prepared/live-current-v3/browser-A/repor
 const claim=async cid=>verified(authorityId,'claim-state',await(await api(base,'claims/'+cid)).json()),round=async rid=>verified(authorityId,'round-state',await(await api(base,'rounds/'+rid)).json());
 const ac=await claim(a.claim.claimId),bc=await claim(b.claim.claimId);assert.equal(ac.status,'REVEALED');assert.equal(bc.status,'REVEALED');assert(ac.receipt.claimSequence<bc.receipt.claimSequence);report.receipts=[ac.receipt,bc.receipt];await check('Two retained browser identities compute, save, commit, upload and reveal full candidates for the same frozen goal/round');
 const runtime=JSON.parse(await readFile(join(dir,'verifier-runtime.json'))),keys=await Promise.all([0,1].map(i=>keyFile(join(dir,'private/verifier-'+i+'.key'))));
-const digestFile=async path=>{const h=createHash('sha256');for await(const b of createReadStream(path))h.update(b);return h.digest('hex');};const modelReadiness={graphRoot:await digestFile(join(runtime.modelDir,'graph-v1.bin')),modelDataRoot:await digestFile(join(runtime.modelDir,'model-v0.bin')),nativeBinaryReady:(await stat(runtime.binary)).isFile()};
+const modelReadiness=await getModelReadiness(runtime.binary,runtime.modelDir);
 const lease=async key=>(await verified(authorityId,'verification-lease',await(await api(base,'verifier-jobs/lease',await request(key,'verifier-lease','',{modelReadiness}))).json())).job;
 const aj=[],bj=[];for(const key of keys){const j=await lease(key);assert.equal(j.claimId,a.claim.claimId);aj.push(j);}for(const key of keys){const j=await lease(key);assert.equal(j.claimId,b.claim.claimId);bj.push(j);}
 let heartbeatError;const heartbeat=setInterval(()=>{for(const [i,j]of aj.entries())request(keys[i],'verifier-heartbeat',j.roundId,{jobId:j.jobId,fencingToken:j.fencingToken}).then(r=>api(base,'verifier-jobs/heartbeat',r)).catch(e=>heartbeatError=e);},20000);
