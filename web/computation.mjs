@@ -105,7 +105,10 @@ export class ComputationView {
     // Primary rate describes the entire pool, including zero work while saving
     // or waiting. It must not depend on the focused worker having a packet.
     const aggregate=execution.aggregate;
-    this.$('miner-compute-neurons').textContent=!active?this.t(execution.phase==='paused'?'Mining paused':'No active computation'):aggregate?.neuronUpdatesPerSecond===null||!aggregate?this.t('Measuring')+' · '+this.t('Sampled {seconds} s',{seconds:seconds(aggregate?.sampledMs||0)}):compactNumber(aggregate.neuronUpdatesPerSecond,{locale:this.locale()}).text;
+    const measured=!!active&&Number.isFinite(aggregate?.neuronUpdatesPerSecond);
+    this.$('miner-compute-neurons').textContent=!active?this.t(execution.phase==='paused'?'Mining paused':'Not running'):measured?compactNumber(aggregate.neuronUpdatesPerSecond,{locale:this.locale()}).text:this.t('Measuring');
+    const unit=document.querySelector('#miner-computation .metric-unit');if(unit)unit.hidden=!measured;
+    this.$('miner-compute-neurons').dataset.unmeasured=String(!measured);
     if(aggregate){
       this.$('miner-compute-synapses').textContent=this.rate(aggregate.synapseAdditionsPerSecond,'additions/s');
       this.$('miner-compute-rate-label').textContent=this.t('30 s window')+' · '+this.t('Sampled {seconds} s',{seconds:seconds(aggregate.sampledMs)})+' · '+this.t('5 s recent')+' '+this.rate(aggregate.recentNeuronUpdatesPerSecond,'neuron updates/s')+' · '+this.t('Session average')+' '+this.rate(aggregate.sessionNeuronUpdatesPerSecond,'neuron updates/s');

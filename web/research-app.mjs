@@ -76,8 +76,10 @@ async function importFiles(files){
   const plan=prepPlan,generation=plan?.generation;await prep.importFiles(files);
   if(plan?.awaitingFiles&&plan.accepts(plan.operationId,generation)&&!document.hidden){plan.awaitingFiles=false;const ready=await prep.start(plan);if(plan.accepts(plan.operationId,generation)){if(ready){if(plan.mode==='prepare-only'){prepPlan=null;render();}else dispatch(plan);}else plan.awaitingFiles=true;}}
 }
-async function startGoal(plan){if(!plan.launchIntent||document.hidden)return;const active=goalView.runner;await active.start({minutes:plan.minutes,storageBytes:plan.storageBytes});active.completion?.catch(showError);}
+function requireMiningWallet(){if(goalView?.financial&&!goalView.financial.account)throw new Error('Connect your wallet before mining');if(goalView?.financial&&!goalView.financial.login)throw new Error('Sign in before mining');}
+async function startGoal(plan){requireMiningWallet();if(!plan.launchIntent||document.hidden)return;const active=goalView.runner;await active.start({minutes:plan.minutes,storageBytes:plan.storageBytes});active.completion?.catch(showError);}
 async function launchGoal(){
+  requireMiningWallet();
    if(legacyRunner?.running)throw new FlowError('operation','Stop the advanced calculation before starting mining');
   if(prep.busy||runner.running&&!runner.paused)return;
   if(goalView.pending.length)throw new FlowError('operation','Recover pending artifacts before continuing mining');
@@ -198,7 +200,7 @@ async function setup(){
   render();if(!deployment.walletMining&&deployment.capabilities.solana&&chainConfig.enabled)initialiseChain(chainConfig,deployment).catch(e=>{chainFailure=e.message;showError(new FlowError('services',e.message));});
 }
 state.subscribe(render);
-$('miner-primary').onclick=()=>{if(prep?.busy){invalidatePreparation('paused');prep.pause();}else if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(!runtime?.ready)act(prepareDevice);else if(goalView&&!goalView.client.online)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
+$('miner-primary').onclick=()=>{if(prep?.busy){invalidatePreparation('paused');prep.pause();}else if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(!runtime?.ready)act(prepareDevice);else if(goalView&&!goalView.client.online)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
 $('miner-files').onchange=()=>act(()=>importFiles($('miner-files').files));$('miner-drop').ondragover=e=>e.preventDefault();$('miner-drop').ondrop=e=>{e.preventDefault();if(actions().import)act(()=>importFiles(e.dataTransfer.files));};
 $('miner-prepare-pause').onclick=()=>{invalidatePreparation('paused');prep.pause();};$('miner-pause-now').onclick=()=>{invalidatePreparation('paused');runner.pauseNow();};$('miner-pause-after').onclick=()=>runner.pauseAfter();
 $('miner-stop').onclick=()=>{if(confirm(t('Discard only the unfinished task? In-memory simulation state is lost. Completed results finish saving.')))runner.stopNow();};

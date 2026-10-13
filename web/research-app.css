@@ -238,3 +238,6 @@ body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"]
 
 #miner-stage-build .miner-stages { grid-template-columns:repeat(3,minmax(0,1fr)); }
 #miner-stage-build .miner-stages li::before { content:none; }
+
+.miner-current-metrics .metric-unit[hidden]{display:none!important}.miner-current-metrics{gap:.35rem;white-space:nowrap}.miner-current-metrics[data-unmeasured="true"]{color:#aaa}
+.miner-current-metrics{align-items:center}.miner-current-metrics .metric-caption{margin:0}.miner-current-metrics .metric-unit{margin:0}
