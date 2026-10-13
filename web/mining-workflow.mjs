@@ -13,3 +13,11 @@ export function miningWorkflow(preparation={}, {ready=false,running=false,pendin
     reused:!!preparation.inventory?.model||preparation.source==='restored',
     states:MINING_STEPS.map((name,index)=>index<MINING_STEPS.indexOf(step)?'complete':name===step?(interrupted||pendingOutputs?'attention':'current'):'pending')};
 }
+export function showMiningStage(document,workflow){
+  document.querySelector('.miner-primary-panel').dataset.stage=workflow.step;
+  for(const [index,step]of MINING_STEPS.entries()){
+    const active=step===workflow.step,tab=document.getElementById('miner-step-'+step),panel=document.getElementById('miner-stage-'+step);
+    tab.hidden=!active;tab.setAttribute('aria-selected',String(active));tab.setAttribute('aria-current',active?'step':'false');tab.disabled=!active;tab.tabIndex=active?0:-1;tab.dataset.status=workflow.states[index];panel.hidden=!active;
+  }
+  document.getElementById('miner-preparation-progress').hidden=workflow.step==='mining';document.getElementById('miner-live-progress').hidden=workflow.step!=='mining';
+}

@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/assets/research-app.css?v=explorer-20261012-r5">
+<link rel="stylesheet" href="/assets/research-app.css?v=mining-session-20261013-v1">
 <div class="section-wrap research-app">
   <nav class="miner-tabs" aria-label="Mining"><a href="/mining/" data-miner-view="experience">Mining</a><a href="/mining/?view=contributions" data-miner-view="contributions">My records</a><a href="/mining/?view=settings" data-miner-view="settings">Settings</a></nav>
   <section id="miner-view-experience">
@@ -6,8 +6,8 @@
     <section class="work-panel miner-primary-panel" aria-label="Mining console">
       <div class="miner-step-tabs" role="tablist" aria-label="Mining stages">
         <button id="miner-step-download" type="button" role="tab" aria-controls="miner-stage-download" aria-selected="true" aria-current="step" tabindex="0"><span class="miner-step-number">1</span><span>Download brain data</span></button>
-        <button id="miner-step-build" type="button" role="tab" aria-controls="miner-stage-build" aria-selected="false" tabindex="-1" disabled><span class="miner-step-number">2</span><span>Build brain model</span></button>
-        <button id="miner-step-mining" type="button" role="tab" aria-controls="miner-stage-mining" aria-selected="false" tabindex="-1" disabled><span class="miner-step-number">3</span><span>Start mining</span></button>
+        <button id="miner-step-build" type="button" role="tab" aria-controls="miner-stage-build" aria-selected="false" tabindex="-1" disabled hidden><span class="miner-step-number">2</span><span>Build brain model</span></button>
+        <button id="miner-step-mining" type="button" role="tab" aria-controls="miner-stage-mining" aria-selected="false" tabindex="-1" disabled hidden><span class="miner-step-number">3</span><span>Start mining</span></button>
       </div>
       <div class="miner-top-progress" aria-label="Current stage progress">
         <div class="job-status miner-stage-status"><span id="miner-status" role="status" aria-live="polite">Checking this browser…</span><span id="miner-session-count" class="mono"></span><span id="research-percent" class="mono"></span></div>
@@ -148,4 +148,4 @@
   </section>
   </section>
 </div>
-<script type="module" src="/assets/research-app.mjs?v=explorer-20261012-r2"></script>
+<script type="module" src="/assets/research-app.mjs?v=mining-session-20261013-v1"></script>

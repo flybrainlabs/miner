@@ -1,6 +1,6 @@
 import { validateDeployment } from './mining-deployment.mjs';
-import { miningWorkflow, MINING_STEPS } from './mining-workflow.mjs';
-import { GoalMiningView } from './goal-mining-view.mjs';
+import { miningWorkflow,showMiningStage } from './mining-workflow.mjs?v=mining-session-20261013-v1';
+import { GoalMiningView } from './goal-mining-view.mjs?v=mining-session-20261013-v1';
 import { taskForIndex } from './catalog-task.mjs';
 import { createMinerState, FlowEvents, FlowError, ERROR_TEXT, errorCode, deriveActions } from './miner-state.mjs';
 import { ModelRuntime, PreparationController } from './preparation-controller.mjs?v=mining-product-20261011-r7';
@@ -128,11 +128,7 @@ function render(){
   $('miner-mode').textContent=t('Verifiable computation using the complete MaleCNS model.');
   const working=calculation()?.running,paused=calculation()?.paused,preparing=prep?.busy;
   const workflow=miningWorkflow(p,{ready:runtime?.ready,running:working,pendingOutputs:goalView?.pending.length||0});
-  document.querySelector('.miner-primary-panel').dataset.stage=workflow.step;
-  for(const [index,step]of MINING_STEPS.entries()){
-    const tab=$('miner-step-'+step),panel=$('miner-stage-'+step);tab.setAttribute('aria-selected',String(step===workflow.step));tab.setAttribute('aria-current',step===workflow.step?'step':'false');tab.disabled=step!==workflow.step;tab.tabIndex=step===workflow.step?0:-1;tab.dataset.status=workflow.states[index];panel.hidden=step!==workflow.step;
-  }
-  $('miner-preparation-progress').hidden=workflow.step==='mining';$('miner-live-progress').hidden=workflow.step!=='mining';
+  showMiningStage(document,workflow);
   $('miner-step-note').textContent=t(workflow.reused&&workflow.step!=='mining'?'Saved data is reused. Integrity checking still runs before mining.':workflow.step==='download'?'Download progress shows actual official file bytes.':workflow.step==='build'?'Checking data, building the full model and loading it on this device.':'Model ready. Mining starts only when you choose Start mining.');
   $('miner-step-note').hidden=!!working||!!goalView?.pending.length;
   $('miner-primary').textContent=t(paused?'Continue mining':working?'Pause mining':preparing?'Pause preparation':workflow.step==='download'?'Download brain data':workflow.step==='build'?'Build brain model':'Start mining');
@@ -200,7 +196,7 @@ async function setup(){
   render();if(!deployment.walletMining&&deployment.capabilities.solana&&chainConfig.enabled)initialiseChain(chainConfig,deployment).catch(e=>{chainFailure=e.message;showError(new FlowError('services',e.message));});
 }
 state.subscribe(render);
-$('miner-primary').onclick=()=>{if(prep?.busy){invalidatePreparation('paused');prep.pause();}else if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(!runtime?.ready)act(prepareDevice);else if(goalView&&!goalView.client.online)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
+$('miner-primary').onclick=()=>{if(prep?.busy){invalidatePreparation('paused');prep.pause();}else if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(goalView?.ui().action==='sync'&&runtime?.ready)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else if(goalView?.ui().action==='none')return;else if(!runtime?.ready)act(prepareDevice);else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
 $('miner-files').onchange=()=>act(()=>importFiles($('miner-files').files));$('miner-drop').ondragover=e=>e.preventDefault();$('miner-drop').ondrop=e=>{e.preventDefault();if(actions().import)act(()=>importFiles(e.dataTransfer.files));};
 $('miner-prepare-pause').onclick=()=>{invalidatePreparation('paused');prep.pause();};$('miner-pause-now').onclick=()=>{invalidatePreparation('paused');runner.pauseNow();};$('miner-pause-after').onclick=()=>runner.pauseAfter();
 $('miner-stop').onclick=()=>{if(confirm(t('Discard only the unfinished task? In-memory simulation state is lost. Completed results finish saving.')))runner.stopNow();};

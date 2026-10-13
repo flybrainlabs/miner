@@ -173,8 +173,8 @@ body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"]
 .thread-control label { display:flex; justify-content:space-between; font-size:.85rem; }
 .thread-control input { width:100%; min-height:44px; accent-color:#eeeeee; }
 #miner-preparation { background:none; border:0; padding:0; margin:.6rem 0; }
-.miner-step-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.4rem; margin:0 0 .6rem; }
-.miner-step-tabs button { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; min-width:0; min-height:80px; padding:.65rem .5rem; color:#aaa; border:1px solid #383838; background:#181818; font:inherit; font-size:.8rem; line-height:1.45; text-align:left; }
+.miner-step-tabs { display:grid; grid-template-columns:minmax(0,1fr); gap:.4rem; margin:0 0 .6rem; }
+.miner-step-tabs button { display:flex; gap:.65rem; align-items:center; min-width:0; min-height:48px; padding:.65rem .5rem; color:#aaa; border:1px solid #383838; background:#181818; font:inherit; font-size:.8rem; line-height:1.45; text-align:left; }
 .miner-step-tabs button[disabled] { opacity:1; cursor:default; }
 .miner-step-tabs button[aria-selected="true"] { color:#fff; background:#252525; border-color:#eee; }
 .miner-step-tabs button[data-status="complete"] { border-color:#777; color:#ccc; }
