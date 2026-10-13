@@ -4,8 +4,12 @@
 
 On 2026-10-12 the owner selected `flybrainlabs` as the project name and GitHub
 account and authorized recreating and publishing the component repositories.
-Use `flybrainlabs` in current project titles, repository descriptions, product
-branding, documentation, release notes and new technical explanations.
+Use `flybrainlabs` for the maintained project and GitHub identity. The owner
+selected `flybrainwork` as the public website UI name on 2026-10-13. Use it in
+website wordmarks, public page titles, metadata and reader-facing product
+introductions. Keep `flybrainlabs` in repository descriptions, source ownership
+and technical project identities. This display change does not migrate a
+repository, asset path, storage key or frozen protocol object.
 
 - Maintained repositories: `web`, `node`, `miner`, `explorer`, `protocol`,
   `contracts`, `sdk`, `infra`, `research`, and `docs`, all under `flybrainlabs`.
@@ -37,7 +41,8 @@ The existing asset is on Solana Devnet; a display rename does not change its min
 authorities, supply, pools, program or cluster and does not issue another token.
 Keep frozen receipt bytes, policy objects, signature domains and historical
 contracts unchanged. Explain compatibility separately instead of rewriting them.
-On compact/mobile navigation, place the language switch inside the menu and keep
+On compact/mobile navigation, place the language switch at the top of the menu,
+outside its scrolling links, visible immediately on short screens. Keep
 reading panels in normal document flow, with no overlays over the prose.
 
 ## Compatibility, retained state and secrets

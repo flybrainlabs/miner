@@ -8,6 +8,7 @@ Object.assign(texts,{
  ROUND_OPENED:['新轮次开放','Round opened'],CLAIMS_CLOSED:['新承诺已截止','New claims closed'],CANDIDATE_COMMITTED:['已接收候选承诺','Candidate commitment admitted'],CANDIDATE_REVEALED:['候选已揭示','Candidate revealed'],VERIFICATION_VOTE_ACCEPTED:['完整重放核验已接收','Full replay vote received'],ROUND_FINALIZED:['本轮已确认唯一赢家','Unique winner confirmed'],ROUND_EXPIRED:['本轮无有效解，已到期','Round expired without valid solution']
 });
 Object.assign(texts,{'research-stage-complete':['当前测试任务已完成 · 暂无开放任务','Current test plan complete · no open task'],'waiting-next-goal':['暂无开放任务','No open task'],committed:['承诺已接收','Commitment received'],failed:['Worker 需要重新准备','Worker needs preparation'],warming:['正在准备线程','Preparing worker'],saving:['正在保存结果','Saving result'],'saved-not-selected':['有效，但承诺较晚','Valid, but committed later'],'winner-confirmed':['本轮获胜','Round winner']});
+Object.assign(texts,{'claim-not-recorded':['本轮已结束 · 候选未提交成功，结果已保留','Round closed · candidate not admitted; results retained']});
 export const lang=()=>window.FlyI18n?.language?.startsWith('zh');export const label=key=>texts[key]?.[lang()?0:1]||key;
 export const say=(zh,en)=>lang()?zh:en;
 export const short=s=>String(s||'—').slice(0,12);
