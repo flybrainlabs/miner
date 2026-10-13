@@ -27,6 +27,8 @@ export function errorCode(error) {
   if(typeof error.code==='string'&&Object.hasOwn(ERROR_TEXT,error.code))return error.code;
   const gatewayCodes={SESSION_REQUIRED:'wallet-login-required',SESSION_EXPIRED:'wallet-login-required',GRANT_EXPIRED:'funding-required',GRANT_REVOKED:'funding-required',GRANT_LIMIT:'funding-required',GRANT_UNAVAILABLE:'funding-required',ROUND_NOT_FUNDED:'funding-unavailable',MINING_PLAN_COMPLETE:'funding-unavailable',GATEWAY_RETRY:'network',RETRYABLE_INFRA_ERROR:'network',STALE_WALLET:'wallet',FUNDING_SCOPE_CHANGED:'wallet'};
   if(gatewayCodes[error.code])return gatewayCodes[error.code];
+  if(['RPC_RATE_LIMITED','RPC_UNAVAILABLE','RPC_BUSY','RPC_UPSTREAM_REJECTED','RPC_INVALID_RESPONSE'].includes(error.code))return 'network';
+  if(error.code==='WRONG_CHAIN')return 'version';
   if(error.code===4001)return 'signature-rejected';
   const s=String(error.message||error);
   if(error.name==='AbortError')return 'paused';
