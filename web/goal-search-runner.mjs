@@ -4,7 +4,7 @@ import { candidateId,trialTask,canonical,hex } from './target-protocol-v2.mjs';
 import { createInputOrder } from './input-order.mjs';
 import { ComputationLog } from './computation.mjs';
 import { releaseOutput,rememberOutputSaveError } from './pending-output.mjs';
-import { errorCode } from './miner-state.mjs';
+import { errorCode } from './miner-state.mjs?v=mining-start-20261013-v1';
 import { WorkMeter } from './work-meter.mjs';
 export class GoalBudget {
   constructor({minutes=null,storageBytes=1024*1024*1024,clock=()=>performance.now()}={}){Object.assign(this,{clock,sessionId:crypto.randomUUID(),activeMs:0,activeSince:null,savedBytes:0,stagingBytes:0,reservedBytes:0,completedCandidates:0,launchIntent:true});this.update({minutes,storageBytes});}
@@ -18,7 +18,7 @@ export class GoalBudget {
 // One candidate per ready model Worker; required public backgrounds are serial.
 // No count budget and no local round creation. The authority decides completion.
 export class GoalSearchRunner {
-  constructor({runtime,pool,config,state,client,store,submission,financial=null,onTrace=()=>{},onFocus=()=>{},onSnapshot=()=>{},onObservationProgress=()=>{},onObservationStage=()=>{},onResult=()=>{},onChange=()=>{}}){Object.assign(this,{runtime,pool,config,state,client,store,submission,financial,onTrace,onFocus,onSnapshot,onObservationProgress,onObservationStage,onResult,onChange});this.observation=new ObservationFocus(this);this.running=false;this.paused=false;this.intent=false;this.executions=new Map();this.history=[];this.meter=new WorkMeter();this.telemetrySequence=0;this.pendingResults=new Map();this.computation=new ComputationLog(300);this.closed=new Set();this.completed=new Set();this.samples=[];this.generation=0;}
+  constructor({runtime,pool,config,state,client,store,submission,financial=null,onTrace=()=>{},onFocus=()=>{},onSnapshot=()=>{},onObservationProgress=()=>{},onObservationStage=()=>{},onResult=()=>{},onError=()=>{},onChange=()=>{}}){Object.assign(this,{runtime,pool,config,state,client,store,submission,financial,onTrace,onFocus,onSnapshot,onObservationProgress,onObservationStage,onResult,onError,onChange});this.observation=new ObservationFocus(this);this.running=false;this.paused=false;this.intent=false;this.executions=new Map();this.history=[];this.meter=new WorkMeter();this.telemetrySequence=0;this.pendingResults=new Map();this.computation=new ComputationLog(300);this.closed=new Set();this.completed=new Set();this.samples=[];this.generation=0;}
   get active(){return [...this.executions.values()].filter(e=>!e.done);}
   get plan(){return this.budget;}
   get reservation(){const g=this.round.goal;return g.maxCandidateBytes+this.round.pre.requiredBackgrounds*16*1024*1024+1024*1024;}
@@ -57,14 +57,14 @@ export class GoalSearchRunner {
         const estimate=await navigator.storage.estimate();if(estimate.quota!=null&&estimate.quota-estimate.usage<2*this.reservation){this.pauseNow('browser-space');break;}
         let meta=this.resumable.shift(),input=meta?.input;
         if(!input){while(this.cursor.cursor<this.order.size){const next=this.order.at(this.cursor.cursor++);if(next&&!this.usedInputs.has(hex(canonical(next)))){input=next;break;}}if(!input){this.domainExhausted=true;this.phase='input-domain-exhausted';break;}meta=await this.store.begin(this.round,input,await candidateId(this.round.roundId,input));this.usedInputs.add(hex(canonical(input)));await this.store.saveCursor(this.round.roundId,this.client.identity.publicKey,this.cursor);}
-        if(this.financial){const scope=await this.financial.requireFunding(this.round,this.client);if(meta.financialScope&&(meta.financialScope.wallet!==scope.wallet||meta.financialScope.grant!==scope.grant||meta.financialScope.generation!==scope.generation))throw Object.assign(new Error('Original candidate funding changed; saved artifacts are retained'),{code:'FUNDING_SCOPE_CHANGED'});meta.financialScope=scope;await this.store.update(meta);await this.financial.reportAttempt(meta,this.client,'computing');}
+        if(this.financial)try{const scope=await this.financial.requireFunding(this.round,this.client);if(meta.financialScope&&(meta.financialScope.wallet!==scope.wallet||meta.financialScope.grant!==scope.grant||meta.financialScope.generation!==scope.generation))throw Object.assign(new Error('Original candidate funding changed; saved artifacts are retained'),{code:'FUNDING_SCOPE_CHANGED'});meta.financialScope=scope;await this.store.update(meta);await this.financial.reportAttempt(meta,this.client,'computing');}catch(error){if(errorCode(error)==='network'&&!this.resumable.some(m=>m.candidateId===meta.candidateId))this.resumable.unshift(meta);throw error;}
         if(generation!==this.generation||!this.intent||this.paused)break;
         this.budget.reservedBytes+=this.reservation;const e={id:crypto.randomUUID(),slot,round:this.round,meta,j:meta.trials.length,done:false,phase:'simulation',reservation:this.reservation,savedBytes:0};this.executions.set(e.id,e);slot.execution=e;slot.status='running';if(!this.focusedExecutionId||this.executions.get(this.focusedExecutionId)?.done)this.focusedExecutionId=e.id;this.runCandidate(e).catch(error=>this.failed(e,error));occupied++;
       }
       if(!this.paused&&this.intent&&!this.domainExhausted&&this.pool.slots.size<this.pool.requested&&this.budget.savedBytes+this.budget.stagingBytes+this.budget.reservedBytes+this.reservation<=this.budget.storageBytes){const warmed=await this.pool.warmOne(this.config,this.budget.sessionId);if(warmed)this.again=true;}
       if(this.domainExhausted&&!this.active.length){this.pauseNow('input-domain-exhausted');this.client.heartbeat(this.budget.sessionId,'domain-exhausted',this.round.roundId).catch(()=>{});}
     }while(this.again&&this.running);
-    }catch(error){this.pauseReason=error.message;this.pauseNow(this.financial?'funding-required':'operation');this.computation.append('error',{detail:error.message});}
+    }catch(error){const code=errorCode(error);this.pauseNow(code);this.computation.append('error',{code,detail:error.message});this.onError(error);}
     finally{this.scheduling=false;this.refreshClock();this.publish();if(this.again&&this.running)queueMicrotask(()=>this.pump());}}
   async runCandidate(e){
     if(e.meta.trials.some((t,j)=>!t.metrics.passed||t.repeatIndex!==j))throw new Error('Only a saved passing background prefix can resume');

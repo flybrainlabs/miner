@@ -7,7 +7,7 @@ export function goalAvailability({network,online,snapshot,serverNow}){
   if(serverNow>=snapshot.round.pre.claimDeadline)return 'new-claims-closed';
   return 'open';
 }
-export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false}){
+export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false,fundingGate=null}){
   const result=(state,button,disabled=false,action='start')=>({state,button,disabled,action,pendingOutputs});
   if(preparing)return result('preparing:'+preparation,'pause-preparation',false,'pause-preparation');
   if(running&&!paused)return result('running','pause-mining',false,'pause');
@@ -24,6 +24,10 @@ export function deriveGoalUiState({network,online,snapshot,serverNow,preparation
   if(snapshot?.state==='RESEARCH_STAGE_COMPLETE')return result('research-stage-complete','check-new-tasks',actionBusy,'sync');
   if(!snapshot?.round)return result('waiting-next-goal','check-new-tasks',actionBusy,'sync');
   if(serverNow>=snapshot.round.pre.claimDeadline)return result('new-claims-closed','new-claims-closed',true,'sync');
+  if(fundingGate==='wallet-login-required')return result('wallet-login-required','sign-in',actionBusy,'sign-in');
+  if(fundingGate==='funding-check-required')return result(fundingGate,'check-wallet-state',actionBusy,'sync-wallet');
+  if(fundingGate==='funding-unavailable')return result(fundingGate,'check-new-tasks',actionBusy,'sync');
+  if(['funding-required','funding-insufficient','funding-device-required'].includes(fundingGate))return result(fundingGate,fundingGate==='funding-device-required'?'renew-device-grant':'review-funding',actionBusy,'review-funding');
   if(paused&&reason==='input-domain-exhausted')return result('input-domain-exhausted','input-domain-exhausted',true,'sync');
   if(paused)return result(reason||'paused','continue-mining',actionBusy,'resume');
   return result('open','start-mining',actionBusy,'start');

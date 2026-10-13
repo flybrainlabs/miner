@@ -25,6 +25,8 @@ export function deriveActions({ready=false,preparing=false,running=false,paused=
 }
 export function errorCode(error) {
   if(typeof error.code==='string'&&Object.hasOwn(ERROR_TEXT,error.code))return error.code;
+  const gatewayCodes={SESSION_REQUIRED:'wallet-login-required',SESSION_EXPIRED:'wallet-login-required',GRANT_EXPIRED:'funding-required',GRANT_REVOKED:'funding-required',GRANT_LIMIT:'funding-required',GRANT_UNAVAILABLE:'funding-required',ROUND_NOT_FUNDED:'funding-unavailable',MINING_PLAN_COMPLETE:'funding-unavailable',GATEWAY_RETRY:'network',RETRYABLE_INFRA_ERROR:'network',STALE_WALLET:'wallet',FUNDING_SCOPE_CHANGED:'wallet'};
+  if(gatewayCodes[error.code])return gatewayCodes[error.code];
   if(error.code===4001)return 'signature-rejected';
   const s=String(error.message||error);
   if(error.name==='AbortError')return 'paused';
@@ -52,6 +54,12 @@ export const ERROR_TEXT={
   memory:'The device could not allocate the complete model. Saved work is retained. Close other applications or continue on a device with more memory.',
   resource:'The scientific archive or resource budget was reached. No scientific events were truncated. Choose another published profile or a device with more resources.',
   operation:'This step could not finish. Saved work is retained. Retry or open diagnostics for the details.',
+  'wallet-login-required':'Your wallet login expired or is missing. Sign in again; the prepared model and saved results remain.',
+  'funding-check-required':'Check wallet balances and rent authorization before starting. No computation has started.',
+  'funding-required':'The task is open, but this wallet has no usable rent authorization. Review a finite rent grant to start; the prepared model remains.',
+  'funding-insufficient':'The rent authorization cannot cover this result. Review its remaining credit and per-result limit, then explicitly renew it.',
+  'funding-device-required':'This device has no signing key for the selected rent grant. Explicitly renew the grant on this device; your saved work remains.',
+  'funding-unavailable':'This task has no usable frozen reward budget. Check for a funded task; your prepared model and results remain.',
   unsupported:'This browser lacks a required capability. You can still browse the atlas and saved results. Use a browser with Workers, WASM, streaming files and Web Locks.',
   'no-opfs':'This browser cannot store the official inputs. You can still browse results or import the exact prepared model in Research tools on a supported device.',
   'activity-ended':'This test activity is not accepting tasks. Existing submissions and eligible funds can still be reviewed in My contributions.',
