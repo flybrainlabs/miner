@@ -1,7 +1,7 @@
 import { setMiningButtonLabel,showMiningButtonBusy,showMiningProgress,MiningLogBackdrop } from './mining-presentation.mjs?v=mining-depth-20261014-v2';
 import { validateDeployment } from './mining-deployment.mjs';
 import { miningWorkflow,showMiningStage } from './mining-workflow.mjs?v=mining-session-20261013-v1';
-import { GoalMiningView } from './goal-mining-view.mjs?v=mining-depth-20261014-v2';
+import { GoalMiningView } from './goal-mining-view.mjs?v=continuous-task-supply-20261014-v1';
 import { taskForIndex } from './catalog-task.mjs';
 import { createMinerState, FlowEvents, FlowError, ERROR_TEXT, errorCode, deriveActions } from './miner-state.mjs?v=mining-start-20261013-v1';
 import { ModelRuntime, PreparationController } from './preparation-controller.mjs?v=mining-product-20261011-r7';
@@ -86,7 +86,7 @@ async function launchGoal(){
   if(prep.busy||runner.running&&!runner.paused)return;
   if(goalView.pending.length)throw new FlowError('operation','Recover pending artifacts before continuing mining');
   if(runner.paused){await runner.resume({minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1048576});return;}
-  await goalView.client.sync();const eligibility=goalView.ui();if(eligibility.state!=='open'||eligibility.action!=='start')throw new Error('No eligible open round: '+eligibility.state);if(!goalView.client.round)throw new Error('No calibrated open goal; the finite research stage may be complete');
+  await goalView.client.sync();const eligibility=goalView.ui();if(!['open','waiting-next-goal'].includes(eligibility.state)||eligibility.action!=='start')throw new Error('Mining entry is unavailable: '+eligibility.state);
   invalidatePreparation('replaced');const plan=new SessionPlan({config,count:1,mode:'target-v2',minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1048576});prepPlan=plan;const generation=plan.generation;const ready=runtime.ready||await prep.start(plan);
   if(!plan.accepts(plan.operationId,generation)||document.hidden)return;
   if(!ready){plan.awaitingFiles=true;plan.remember();return;}prepPlan=null;await startGoal(plan);
@@ -206,7 +206,7 @@ async function setup(){
 state.subscribe(render);
 $('miner-graphics').addEventListener('change',()=>queueMicrotask(render));
 $('anatomy-outline').addEventListener('change',()=>queueMicrotask(render));
-$('miner-primary').onclick=()=>{if(prep?.busy||actionBusy)return;if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='review-funding')act(()=>goalView.financial.requestFunding());else if(goalView?.ui().action==='sync-wallet')act(()=>goalView.financial.refresh());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(goalView?.ui().action==='sync'&&runtime?.ready)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else if(goalView?.ui().action==='none')return;else if(!runtime?.ready)act(prepareDevice);else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
+$('miner-primary').onclick=()=>{if(prep?.busy||actionBusy)return;if(goalView?.ui().action==='pause'||runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='review-funding')act(()=>goalView.financial.requestFunding());else if(goalView?.ui().action==='sync-wallet')act(()=>goalView.financial.refresh());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(goalView?.ui().action==='sync'&&runtime?.ready)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else if(goalView?.ui().action==='none')return;else if(!runtime?.ready)act(prepareDevice);else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
 $('miner-files').onchange=()=>act(()=>importFiles($('miner-files').files));$('miner-drop').ondragover=e=>e.preventDefault();$('miner-drop').ondrop=e=>{e.preventDefault();if(actions().import)act(()=>importFiles(e.dataTransfer.files));};
 $('miner-prepare-pause').onclick=()=>{invalidatePreparation('paused');prep.pause();};$('miner-pause-now').onclick=()=>{invalidatePreparation('paused');runner.pauseNow();};$('miner-pause-after').onclick=()=>runner.pauseAfter();
 $('miner-stop').onclick=()=>{if(confirm(t('Discard only the unfinished task? In-memory simulation state is lost. Completed results finish saving.')))runner.stopNow();};
