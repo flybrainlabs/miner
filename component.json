@@ -138,7 +138,11 @@
     "web/vendor/three/three.core.min.js": "web/vendor/three/three.core.min.js",
     "web/vendor/three/three.module.min.js": "web/vendor/three/three.module.min.js",
     "web/work-meter.mjs": "web/work-meter.mjs",
-    "tests/wallet_entry_gate.mjs": "tests/wallet_entry_gate.mjs"
+    "tests/wallet_entry_gate.mjs": "tests/wallet_entry_gate.mjs",
+    "web/mining-presentation.mjs": "web/mining-presentation.mjs",
+    "tests/mining_presentation.mjs": "tests/mining_presentation.mjs",
+    "tests/mining_motion_browser.py": "tests/mining_motion_browser.py",
+    "web/mining-log-occlusion.mjs": "web/mining-log-occlusion.mjs"
   },
   "project": "flybrainlabs"
 }

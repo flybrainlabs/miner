@@ -156,7 +156,7 @@ body[data-page="mining"] .research-app progress,body[data-page="mining"] .resear
 body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"] #wallet-link { display:none; }
 .research-app { max-width:1480px; padding-top:.5rem; }
 #miner-view-experience { display:block; }
-.miner-workspace { display:grid; grid-template-columns:minmax(300px,420px) minmax(0,700px); align-items:start; justify-content:space-between; gap:1.3rem; }
+.miner-workspace { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:1.3rem; }
 .research-app .miner-primary-panel,.research-app #research-response { margin:0; padding:1rem; border:1px solid #333333; border-radius:12px; background:#141414; min-width:0; }
 .miner-primary-panel h2 { font-size:1rem; margin:.5rem 0; }
 .miner-primary-panel p { font-size:.8rem; line-height:1.5; }
@@ -229,7 +229,7 @@ body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"]
 #miner-execution-list .button { text-align:left; font-size:.8rem; }
 #miner-round-history { display:grid; gap:.5rem; }
 #miner-artifact-panel:has(#miner-result-details[hidden]) { display:none; }
-@media(min-width:1100px) and (max-height:850px) { .miner-workspace { grid-template-columns:minmax(320px,1fr) minmax(0,620px); gap:1rem; } }
+@media(min-width:1100px) and (max-height:850px) { .miner-workspace { grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; } }
 @media(max-width:950px) { .miner-workspace { grid-template-columns:minmax(0,1fr); } .miner-overview,.miner-rule-layer { grid-template-columns:minmax(0,1fr); } .research-app { padding-inline:1rem; } }
 @media(max-width:430px) { .research-app { padding-inline:.65rem; } .research-app .miner-primary-panel,.research-app #research-response { padding:.75rem; } .anatomy-actions { gap:.1rem; } .research-app .anatomy-toolbar .button,.research-app .anatomy-toolbar summary { font-size:.68rem; padding:.25rem .2rem; } .miner-tabs { gap:1rem; } }
 
@@ -241,3 +241,35 @@ body[data-page="mining"] #main-nav > a[href^="/mining"],body[data-page="mining"]
 
 .miner-current-metrics .metric-unit[hidden]{display:none!important}.miner-current-metrics{gap:.35rem;white-space:nowrap}.miner-current-metrics[data-unmeasured="true"]{color:#aaa}
 .miner-current-metrics{align-items:center}.miner-current-metrics .metric-caption{margin:0}.miner-current-metrics .metric-unit{margin:0}
+
+/* Motion is independent of scientific progress and pauses outside the viewport. */
+.mining-button-spinner{display:none;width:16px;height:16px;flex-shrink:0;border:2px solid currentColor;border-right-color:transparent;border-radius:50%}
+.research-app .button.is-loading{display:flex;align-items:center;justify-content:center;gap:10px;cursor:progress;opacity:.82}
+.button.is-loading .mining-button-spinner{display:block;animation:mining-spinner .9s linear infinite}
+.mining-button-label{min-width:0;overflow-wrap:anywhere}
+.mining-progress-shell{position:relative;height:10px;width:100%;flex-basis:100%;margin:.65rem 0;overflow:hidden;border:1px solid #454545;border-radius:5px;background:#1c1c1c}
+.research-app .mining-progress-shell progress{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0}
+.mining-progress-visual{position:absolute;inset:0;display:block;overflow:hidden}
+.mining-progress-fill{display:block;height:100%;background:#ddd;transition:width .45s ease;border-radius:3px;position:relative;overflow:hidden}
+.mining-progress-shell[data-active=true] .mining-progress-fill{background:repeating-linear-gradient(115deg,#f5f5f5 0 10px,#c5c5c5 10px 20px);background-size:44px 100%;animation:mining-progress-flow 1.6s linear infinite}
+.mining-progress-shell[data-indeterminate=true] .mining-progress-fill{width:28%}
+.mining-progress-shell[data-indeterminate=true][data-active=true] .mining-progress-fill{animation:mining-progress-indeterminate 2.2s ease-in-out infinite}
+.mining-log-backdrop{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;user-select:none;padding:20px;mask-image:linear-gradient(transparent,#000 13%,#000 85%,transparent);-webkit-mask-image:linear-gradient(transparent,#000 13%,#000 85%,transparent)}
+.mining-log-track{animation:mining-log-scroll 48s linear infinite;will-change:transform}
+.mining-log-group{min-height:38vh;padding:16px 0;display:grid;gap:12px;align-content:start}
+.mining-log-line{display:block;color:#ffffff52;font:400 11px/1.9 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:.025em;overflow-wrap:anywhere}
+strong.mining-log-line{font-weight:800;color:#ffffffa8;text-shadow:0 0 12px #ffffff30;border-left:2px solid #ffffff88;padding-left:10px}
+.mining-log-backdrop[data-paused=true] .mining-log-track{animation-play-state:paused}
+.mining-log-backdrop:not([data-foreground=anatomy]){visibility:hidden}
+.propagation-stage{isolation:isolate}
+#anatomy-stage,#propagation-canvas{z-index:2;background:transparent}
+#anatomy-stage canvas{background:transparent}
+#propagation-canvas{background:#111111}
+#anatomy-disabled,#anatomy-loading{z-index:3;pointer-events:none}
+@keyframes mining-spinner{to{transform:rotate(360deg)}}
+@keyframes mining-progress-flow{to{background-position:44px 0}}
+@keyframes mining-progress-indeterminate{0%{transform:translateX(-110%)}100%{transform:translateX(470%)}}
+@keyframes mining-log-scroll{to{transform:translateY(-50%)}}
+@media(prefers-reduced-motion:reduce){.mining-log-track,.button.is-loading .mining-button-spinner,.mining-progress-fill{animation:none!important;transition:none!important;will-change:auto}.mining-progress-shell[data-indeterminate=true] .mining-progress-fill{width:28%;transform:none}}
+
+.mining-progress-shell[data-indeterminate=true][data-active=false] .mining-progress-fill{width:0}

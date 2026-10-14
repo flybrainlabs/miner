@@ -1,3 +1,4 @@
+import { setMiningButtonLabel } from './mining-presentation.mjs?v=mining-depth-20261014-v2';
 import { compactNumber } from './metric-format.mjs';
 import { TargetRoundClient } from './target-round-client.mjs';
 import { CandidateStoreV2 } from './candidate-store-v2.mjs';
@@ -56,7 +57,7 @@ export class GoalMiningView {
   $('miner-mode').textContent=say('基于脑仿真的可验证计算挖矿','Verifiable computation mining based on brain simulation');
   // Network state cannot hide local download/build controls or their progress.
   const walletEntry=['connect-wallet','sign-in'].includes(ui.action)||ui.state==='wallet-restoring';
-  if(this.runtime.ready||run.running||this.pending.length||walletEntry){$('miner-primary').textContent=this.recovering?say('正在保存产物…','Saving artifacts…'):label(ui.button);$('miner-primary').disabled=ui.disabled;
+  if(this.runtime.ready||run.running||this.pending.length||walletEntry){setMiningButtonLabel($('miner-primary'),this.recovering?say('正在保存产物…','Saving artifacts…'):label(ui.button));$('miner-primary').disabled=ui.disabled;
   if(!this.preparing)$('miner-status').textContent=this.pending.length&&!run.running?label('save-failed'):run.paused?label('paused'):run.running?label(run.phase):label(walletEntry?ui.state:status);
   $('miner-guidance').hidden=false;$('miner-guidance').textContent=this.pending.length?say(`计算完成，${this.pending.length} 份产物待保存。请重试保存或下载。`,`Computation complete; ${this.pending.length} artifacts await storage. Retry saving or download.`):run.paused?say(`已暂停：${label(run.reason||'paused')}。点击继续挖矿。`,`Paused: ${label(run.reason||'paused')}. Select Continue mining.`):run.running?label(run.phase):status==='research-stage-complete'?say('本批测试任务已全部完成，当前没有开放的挖矿任务。新任务完成校准并配置奖励预算后才能继续；可点击“检查新任务”刷新任务状态。','This test plan is complete; no mining task is open. Mining can continue after new tasks are calibrated and a reward budget is configured. Select Check for new tasks to refresh availability.'):label(status);
   if(this.runtime.ready&&!run.running&&!this.pending.length){$('miner-step-note').hidden=false;$('miner-step-note').textContent=status==='open'?say('模型已准备好。连接并登录钱包后，点击“开始挖矿”计算当前任务。','Model ready. After connecting and signing in, select Start mining for the current task.'):say('模型已准备好并保留在本机，当前没有可计算的开放任务。','Your prepared model is retained on this device. No task is currently open.');}}

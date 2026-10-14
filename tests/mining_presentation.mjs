@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {candidateBackdropRecord,miningBackdropRecord} from '../web/mining-presentation.mjs';
+const t=(s,v={})=>Object.entries(v).reduce((text,[key,value])=>text.replaceAll('{'+key+'}',String(value)),s);
+let checks=0;
+const check=fn=>{fn();checks++;};
+check(()=>assert.equal(miningBackdropRecord({event:'unknown',detail:'PRIVATE_RAW_DIAGNOSTIC'},t),null));
+check(()=>{const row=miningBackdropRecord({event:'error',detail:'PRIVATE_RAW_DIAGNOSTIC',token:'PRIVATE_SESSION'},t);assert.equal(row.text,'Computation needs attention');assert(!row.text.includes('PRIVATE'));});
+check(()=>{const row=miningBackdropRecord({event:'progress',sessionElapsedMs:1200,telemetry:{stage:'simulation',completedSteps:8,totalSteps:256,neuronUpdates:2641952,synapseTransmissions:53}},t);assert.equal(row.text,'[1.2 s] Step 8/256 · neuron updates 2641952 · synaptic additions 53');});
+check(()=>assert.equal(miningBackdropRecord({event:'progress',telemetry:{stage:'saving'}},t).text,'Saving the computed result'));
+check(()=>assert.equal(miningBackdropRecord({event:'complete',saved:false,sciencePassed:true},t).text,'Background completed · saving needs attention'));
+const base={candidateId:'b'.repeat(64),round:{pre:{roundSequence:32}}};
+check(()=>assert.equal(candidateBackdropRecord({...base,sciencePassed:true,partial:true},t),null));
+check(()=>assert.equal(candidateBackdropRecord({...base,sciencePassed:true,searchComplete:false},t),null));
+check(()=>{const record=candidateBackdropRecord({...base,sciencePassed:true,searchComplete:true},t);assert(record.emphasis);assert(record.text.includes('awaiting verification'));assert(!record.text.includes('won'));});
+check(()=>{const record=candidateBackdropRecord({...base,won:true},t);assert(record.emphasis);assert.equal(record.text,'Round 32 won · candidate bbbbbbbbbbbb');assert(!record.text.includes('reward received'));});
+check(()=>assert(candidateBackdropRecord({...base,won:true,financial:{finalized:{commitment:'finalized'}}},t).text.includes('reward received')));
+check(()=>assert(!candidateBackdropRecord({...base,sciencePassed:true,searchComplete:true,financial:{finalized:{commitment:'finalized'}}},t).text.includes('reward received')));
+console.log(JSON.stringify({passed:true,checks,sanitizedDisplay:true,qualificationAndPaymentRemainDistinct:true}));

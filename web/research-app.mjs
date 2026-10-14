@@ -1,6 +1,7 @@
+import { setMiningButtonLabel,showMiningButtonBusy,showMiningProgress,MiningLogBackdrop } from './mining-presentation.mjs?v=mining-depth-20261014-v2';
 import { validateDeployment } from './mining-deployment.mjs';
 import { miningWorkflow,showMiningStage } from './mining-workflow.mjs?v=mining-session-20261013-v1';
-import { GoalMiningView } from './goal-mining-view.mjs?v=mining-start-20261013-v1';
+import { GoalMiningView } from './goal-mining-view.mjs?v=mining-depth-20261014-v2';
 import { taskForIndex } from './catalog-task.mjs';
 import { createMinerState, FlowEvents, FlowError, ERROR_TEXT, errorCode, deriveActions } from './miner-state.mjs?v=mining-start-20261013-v1';
 import { ModelRuntime, PreparationController } from './preparation-controller.mjs?v=mining-product-20261011-r7';
@@ -19,6 +20,7 @@ import { saveLocalResponse, listLocalResponses, loadLocalResponse, loadLocalPrev
 
 const $=id=>document.getElementById(id),t=(s,v={})=>window.FlyI18n?.t(s,v)||s;
 const state=createMinerState(),events=new FlowEvents();
+const logBackdrop=new MiningLogBackdrop($('miner-log-backdrop'),{t});
 let config,manifest,catalog,profiles,profileId,prep,runtime,runner,computationView,responseView,contributionView,tools,chain=null,sdk=null,wallet=null,submission=null,snapshot=null;
 let local=[],pending=[],latest=null,selectedBundle=null,chainRefresh=null,lastRefresh=0,quote=null,fundRow=null,unsubscribeWallet=null,lastWalletAddress=null;
 let actionBusy=false,initialised=false,sessionFeeLimit=null,hiddenAt=null,serviceCheckAt=0,serviceAvailable=false,prepPlan=null,viewOperation=0,newResults=0;
@@ -131,8 +133,8 @@ function render(){
   showMiningStage(document,workflow);
   $('miner-step-note').textContent=t(workflow.reused&&workflow.step!=='mining'?'Saved data is reused. Integrity checking still runs before mining.':workflow.step==='download'?'Download progress shows actual official file bytes.':workflow.step==='build'?'Checking data, building the full model and loading it on this device.':'Model ready. Mining starts only when you choose Start mining.');
   $('miner-step-note').hidden=!!working||!!goalView?.pending.length;
-  $('miner-primary').textContent=t(paused?'Continue mining':working?'Pause mining':preparing?'Pause preparation':workflow.step==='download'?'Download brain data':workflow.step==='build'?'Build brain model':'Start mining');
-  $('miner-primary').disabled=preparing?false:working?!paused&&e.phase==='pausing':!a.start;$('miner-single').disabled=!a.start||!!working;
+  setMiningButtonLabel($('miner-primary'),t(paused?'Continue mining':working?'Pause mining':workflow.step==='download'?'Download brain data':workflow.step==='build'?'Build brain model':'Start mining'));
+  $('miner-primary').disabled=preparing?true:working?!paused&&e.phase==='pausing':!a.start;$('miner-single').disabled=!a.start||!!working;
   for(const id of ['miner-limit-count','miner-limit-minutes','miner-limit-storage'])$(id).disabled=!!preparing||!!working&&!paused;
   $('miner-pause-now').hidden=!working||paused;$('miner-pause-now').disabled=e.phase==='pausing';$('miner-run-actions').hidden=!working;$('miner-prepare-pause').hidden=!preparing;
   $('miner-files').disabled=!a.import;$('research-run').disabled=!a.run;$('research-prepare').disabled=!a.prepare;
@@ -157,6 +159,12 @@ function render(){
   // the focused execution's saving/complete state with another Worker's run.
   if(activeChain())renderSubmission();else $('miner-submission').hidden=true;
   if(goalView){goalView.preparing=preparing;goalView.actionBusy=actionBusy||!!legacyRunner?.running;goalView.render();}
+  const preparingLabel=t(phaseText[p.phase]||'Preparing…'),busy=!!preparing||actionBusy||!initialised;
+  showMiningButtonBusy($('miner-primary'),busy,preparing?preparingLabel:t(initialised?'Processing…':'Checking this browser…'));
+  setMiningButtonLabel($('research-prepare'),t('Check and load in browser →'));setMiningButtonLabel($('research-restore'),t('Use cached model'));
+  for(const id of ['research-prepare','research-restore'])showMiningButtonBusy($(id),!!preparing,preparingLabel);
+  for(const progress of document.querySelectorAll('.research-app progress'))showMiningProgress(progress,progress.id==='miner-compute-progress'?!!working&&!paused:!!preparing);
+  logBackdrop.update({preparation:p.phase,progress:p.progress,phaseLabel:preparingLabel,logRows:calculation()?.computation.rows||[],candidates:goalView?.rows||[],visible:s.view==='experience'&&responseView?.propagation.graphicsEnabled!==false,anatomy:responseView?.propagation.scene});
 }
 async function initialiseChain(chainConfig,deployment){
   const quick=await profiles.get('quick32');sdk=await import('/assets/vendor/generated/solana-client.mjs');const client=new sdk.CampaignClient(chainConfig,deployment);await client.load();client.assertCatalog(quick.catalog);const snap=await client.snapshot();chain=client;snapshot=snap;
@@ -196,7 +204,9 @@ async function setup(){
   render();if(!deployment.walletMining&&deployment.capabilities.solana&&chainConfig.enabled)initialiseChain(chainConfig,deployment).catch(e=>{chainFailure=e.message;showError(new FlowError('services',e.message));});
 }
 state.subscribe(render);
-$('miner-primary').onclick=()=>{if(prep?.busy){invalidatePreparation('paused');prep.pause();}else if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='review-funding')act(()=>goalView.financial.requestFunding());else if(goalView?.ui().action==='sync-wallet')act(()=>goalView.financial.refresh());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(goalView?.ui().action==='sync'&&runtime?.ready)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else if(goalView?.ui().action==='none')return;else if(!runtime?.ready)act(prepareDevice);else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
+$('miner-graphics').addEventListener('change',()=>queueMicrotask(render));
+$('anatomy-outline').addEventListener('change',()=>queueMicrotask(render));
+$('miner-primary').onclick=()=>{if(prep?.busy||actionBusy)return;if(runner?.running&&!runner.paused)runner.pauseNow();else if(goalView?.ui().action==='connect-wallet')act(()=>goalView.financial.requestConnection());else if(goalView?.ui().action==='sign-in')act(()=>goalView.financial.signIn());else if(goalView?.ui().action==='review-funding')act(()=>goalView.financial.requestFunding());else if(goalView?.ui().action==='sync-wallet')act(()=>goalView.financial.refresh());else if(goalView?.ui().action==='retry-save')act(()=>goalView.retryPendingOutputs());else if(goalView?.ui().action==='sync'&&runtime?.ready)act(()=>goalView.client.poll().then(()=>goalView.refresh(true)));else if(goalView?.ui().action==='none')return;else if(!runtime?.ready)act(prepareDevice);else act(()=>launch(false));};$('miner-single').onclick=()=>act(()=>launch(true));
 $('miner-files').onchange=()=>act(()=>importFiles($('miner-files').files));$('miner-drop').ondragover=e=>e.preventDefault();$('miner-drop').ondrop=e=>{e.preventDefault();if(actions().import)act(()=>importFiles(e.dataTransfer.files));};
 $('miner-prepare-pause').onclick=()=>{invalidatePreparation('paused');prep.pause();};$('miner-pause-now').onclick=()=>{invalidatePreparation('paused');runner.pauseNow();};$('miner-pause-after').onclick=()=>runner.pauseAfter();
 $('miner-stop').onclick=()=>{if(confirm(t('Discard only the unfinished task? In-memory simulation state is lost. Completed results finish saving.')))runner.stopNow();};
@@ -278,3 +288,5 @@ async function advanceSubmission(){
   else await submission.reconcile(current.record);
   await refresh();render();
 }
+
+window.addEventListener('pagehide',event=>{if(!event.persisted)logBackdrop.dispose();});
