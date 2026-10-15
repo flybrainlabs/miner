@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {validateDeployment,assertServiceIdentity} from '../web/mining-deployment.mjs';
-const d=JSON.parse(await readFile('web/data/mining-deployment-v1.json')),model=JSON.parse(await readFile('web/data/research-profiles/duration256-v1-dev/config.json'));
+const raw=JSON.parse(await readFile('web/data/mining-deployment-v1.json')),model=JSON.parse(await readFile('web/data/research-profiles/duration256-v1-dev/config.json'));
+const d={...raw,schema:'flybrain-mining-deployment-v1',version:1,execution:'target-v2',environment:'development',networkId:'legacy-network',authorityId:'a'.repeat(64),campaignId:'legacy-campaign',walletMining:undefined,taskFactoryV4:undefined,capabilities:{...raw.capabilities,completeReplay:true,signedTelemetry:true,roundHistory:true,payment:false,rewards:false,requiredWallet:false,solana:false}};
 const network=validateDeployment(d,model),service={networkId:d.networkId,authorityId:d.authorityId,campaignId:d.campaignId,environment:d.environment,modelIdentity:d.model,serviceCapabilities:d.capabilities,payment:false,rewards:false};
 assert.equal(assertServiceIdentity(network,service),service);
 for(const key of ['payment','rewards','requiredWallet','solana'])for(const value of [true,undefined])assert.throws(()=>validateDeployment({...d,capabilities:{...d.capabilities,[key]:value}},model),/unsupported/);
@@ -10,4 +11,10 @@ for(const key of ['graphRoot','modelRoot','modelDataRoot','registryRoot','parame
 assert.throws(()=>validateDeployment({...d,model:{...d.model,parameterVersion:'unknown'}},model),/parameters/);
 assert.throws(()=>validateDeployment({...d,environment:'production',apiBase:''},model),/incomplete/);
 assert.equal(validateDeployment({...d,apiBase:''},model).apiBase,'','explicit development gateway only');
-console.log('Pinned deployment rejects unknown funding, Solana, identity, model/parameter and transport capabilities.');
+const wallet={schema:'flybrainlabs-wallet-mining-config-v3',cluster:'devnet',genesisHash:'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',programId:'5yxjnH1PSk8iQKfK3ejG4jfSkewkTKfcpJygojdb6sam',mint:'HCdV49RkqtC7pPwzHCYg5KtkmU8opifjojLbAyZXKgQW',policyHash:'b'.repeat(64),configuration:'/assets/data/wallet-mining-v3.json'};
+const v4={...d,schema:'flybrainlabs-mining-deployment-v4',version:4,execution:'contract-v4',networkId:wallet.genesisHash,authorityId:wallet.policyHash,campaignId:'factory-address',walletMining:wallet,taskFactoryV4:{schema:'flybrainlabs-task-factory-deployment-v4',configuration:'/assets/data/task-factory-deployment-v4.json',factory:'factory-address',programId:wallet.programId,catalogRoot:'c'.repeat(64)},capabilities:{...d.capabilities,signedTelemetry:false,payment:true,rewards:true,requiredWallet:true,solana:true}};
+assert.equal(validateDeployment(v4,model).execution,'contract-v4');
+for(const key of ['payment','rewards','requiredWallet','solana'])assert.throws(()=>validateDeployment({...v4,capabilities:{...v4.capabilities,[key]:false}},model));
+for(const changed of [{environment:'production'},{networkId:'wrong'},{campaignId:'wrong'},{taskFactoryV4:{...v4.taskFactoryV4,catalogRoot:'wrong'}},{walletMining:{...wallet,genesisHash:'mainnet'}}])assert.throws(()=>validateDeployment({...v4,...changed},model));
+assert.throws(()=>validateDeployment({...v4,model:{...v4.model,modelRoot:'wrong'}},model),/model/);
+console.log(JSON.stringify({passed:true,checks:['retained V1 identity, model and capability gates','explicit Devnet V4 contract/wallet/catalog bindings','unsupported funding, mainnet and model changes rejected']}));

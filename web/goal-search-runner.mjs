@@ -25,7 +25,7 @@ export class GoalSearchRunner {
   get reservation(){const g=this.round.goal;return g.maxCandidateBytes+this.round.pre.requiredBackgrounds*16*1024*1024+1024*1024;}
   async start(options={}){
     if(this.running){if(this.paused)return this.resume(options);return;}
-    if(!this.runtime.ready)throw new Error('Prepare the complete model first');await this.client.sync();if(!this.client.identity)throw new Error('Persistent signing identity unavailable');if(!this.client.online)throw new Error('Authority unavailable');
+    if(!this.runtime.ready)throw new Error('Prepare the complete model first');await this.client.sync();this.client.assertMiningAuthorization?.();if(!this.client.identity)throw new Error('Persistent signing identity unavailable');if(!this.client.online)throw new Error('Authority unavailable');
     if(this.financial&&(!this.financial.account||!this.financial.login||Number(this.financial.login.expiresAt)<=Date.now()/1000))throw Object.assign(new Error('A live wallet login is required'),{code:'wallet-login-required'});
     if(this.client.round&&this.client.serverNow>=this.client.round.pre.claimDeadline)throw new Error('New claims are closed');
     if(this.financial&&this.client.round)await this.financial.requireFunding(this.client.round,this.client);
@@ -53,6 +53,7 @@ export class GoalSearchRunner {
       if(this.pendingRound){if(this.active.length)break;const next=this.pendingRound;this.pendingRound=null;await this.prepareRound(next);if(!this.intent||this.paused)break;}
       if(!this.intent||this.paused){this.settlePause();if(!this.active.length&&!this.intent&&!this.paused)this.finish();break;}
       if(!this.client.online){this.disconnected();break;}
+      try{this.client.assertMiningAuthorization?.();}catch{this.pauseNow('wallet-login-required');break;}
       if(this.client.identity?.publicKey!==this.sessionIdentity||this.sessionWallet&&(this.financial?.account?.address!==this.sessionWallet.address||this.financial?.generation!==this.sessionWallet.generation)){this.pauseNow('wallet-changed');break;}
       if(this.financial&&(!this.financial.login||Number(this.financial.login.expiresAt)<=Date.now()/1000)){this.pauseNow('wallet-login-required');break;}
       if(this.budget.limit){this.pauseNow(this.budget.limit);break;}

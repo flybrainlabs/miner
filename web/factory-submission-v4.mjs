@@ -26,6 +26,7 @@ export class FactorySubmissionV4 {
     if(!existing){if(t.state!==STATE.ACTIVE)throw new Error('Task is no longer active');await c.send([instruction(c.reader.program,[meta(factory),meta(task,true),meta(address,true),meta(miner,false,true),meta(miner,true,true),system()],4,{commitment:commit,beneficiary:miner})]);}
     let s=await c.reader.submission(address,task);if(s.state!==STATE.COMMITTED)return this.reconcile(m);
     await this.changed(m,'uploading');
+    await c.contentStore.begin?.({submission:address.toBase58(),manifest,archive,salt:hex(salt)});
     for(let j=0;j<m.trials.length;j++)await c.contentStore.put(m.trials[j].resultRoot,await this.store.archive(m,j));
     await c.contentStore.put(hex(evidence.manifest),manifestBytes);await c.contentStore.put(hex(evidence.archive),archiveBytes);
     // A separate slot protects the commitment. This is not round pacing.
@@ -40,12 +41,13 @@ export class FactorySubmissionV4 {
     return this.changed(m,m.won?'winner-confirmed':s.state===STATE.INVALID?'invalid':expired?'timed_out':s.state===STATE.VALID?'valid':s.state===STATE.REVEALED?'verifying':'committed');
   }
   async finalize(m){
+    if([STATE.SOLVED,STATE.FAILED].includes((await this.client.reader.task(m.round.pre.taskIndex)).state))return this.reconcile(m);
     const c=this.client,f=await c.reader.factory(),task=c.reader.a.task(c.deployment.factory,m.round.pre.taskIndex),keys=[meta(c.deployment.factory,true),meta(task,true),meta(m.factoryV4.submission)];
     if(f.nextIndex<f.count)keys.push(meta(c.reader.a.task(c.deployment.factory,f.nextIndex),true));
     await c.send([instruction(c.reader.program,keys,7)]);await c.sync();return this.reconcile(m);
   }
   async pay(m){
-    const c=this.client,t=await c.reader.task(m.round.pre.taskIndex),beneficiary=new PublicKey(t.beneficiary),miner=new PublicKey(c.wallet.publicKey),f=await c.reader.factory(),mint=new PublicKey(f.mint),ata=getAssociatedTokenAddressSync(mint,beneficiary);
+    const c=this.client,t=await c.reader.task(m.round.pre.taskIndex);if(t.paid)return this.reconcile(m);const beneficiary=new PublicKey(t.beneficiary),miner=new PublicKey(c.wallet.publicKey),f=await c.reader.factory(),mint=new PublicKey(f.mint),ata=getAssociatedTokenAddressSync(mint,beneficiary);
     const task=c.reader.a.task(c.deployment.factory,m.round.pre.taskIndex);
     await c.send([createAssociatedTokenAccountIdempotentInstruction(miner,ata,beneficiary,mint),instruction(c.reader.program,[meta(c.reader.a.global),meta(c.deployment.factory,true),meta(task,true),meta(m.factoryV4.submission),meta(c.reader.a.pool(0),true),meta(ata,true),meta(TOKEN_PROGRAM_ID)],9)]);return this.reconcile(m);
   }
