@@ -8,13 +8,13 @@ import {MinerRpcSettingsV4} from './miner-rpc-settings-v4.mjs';
 import {FactoryMiningClientV4,FactorySubmissionV4,factoryWalletAdapter} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
-Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…']});
+Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model']});
 export class FactoryMiningViewV4 extends GoalMiningView {
   constructor({factory,financial,...options}){
     if(!financial?.availableWallets)throw new Error('The shared wallet connection is unavailable');
     const adapter=factoryWalletAdapter({deployment:factory,session:financial}),network={...options.network,...factory,protocolVersion:4,networkId:factory.genesisHash,campaignId:factory.factory,authorityId:factory.policyHash};
     const bindings={client:callbacks=>new FactoryMiningClientV4({deployment:factory,...adapter,...callbacks}),submission:(client,store,onChange)=>new FactorySubmissionV4(client,store,onChange)};
-    super({...options,network,financial,bindings});this.factoryDeployment=factory;this.adapter=adapter;this.client.assertMiningAuthorization=adapter.assertMiningAuthorization;this.taskHistory=[];this.submissionRetryAt=new Map();
+    super({...options,network,financial,bindings});this.factoryDeployment=factory;this.adapter=adapter;financial.miningBalanceReader=adapter.readBalances;this.client.assertMiningAuthorization=adapter.assertMiningAuthorization;this.taskHistory=[];this.submissionRetryAt=new Map();
     this.rpcStep=document.createElement('button');this.rpcStep.id='miner-step-rpc';this.rpcStep.type='button';this.rpcStep.setAttribute('role','tab');this.rpcStep.setAttribute('aria-controls','miner-rpc-settings');this.rpcStep.dataset.noI18n='';
     const number=document.createElement('span');number.className='miner-step-number';number.textContent='1';this.rpcStepLabel=document.createElement('span');this.rpcStep.append(number,this.rpcStepLabel);document.querySelector('.miner-step-tabs').prepend(this.rpcStep);this.rpcStep.onclick=()=>this.rpcSettings.focus();
     for(const [index,step]of MINING_STEPS.entries())$('miner-step-'+step).querySelector('.miner-step-number').textContent=String(index+2);
@@ -33,7 +33,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
   async connectRpc(){
     if(!this.adapter.rpc.ready){this.rpcStateChanged();await this.refresh();return;}
     await this.client.syncing?.catch(()=>{});
-    try{await this.client.initialize();this.financial.factoryRentQuote=String(await this.client.reader.connection.getMinimumBalanceForRentExemption(768,'finalized'));await this.refresh(true);}
+    try{await this.client.initialize();this.financial.factoryRentQuote=String(await this.client.reader.connection.getMinimumBalanceForRentExemption(768,'finalized'));if(this.financial.login)await this.financial.refresh().catch(()=>{});await this.refresh(true);}
     catch(error){this.client.disconnected(error);if(this.adapter.rpc.ready)this.client.startPolling();throw error;}
   }
   async initialize(){this.client.bindWallet();await this.adapter.rpc.initialize();await this.refresh();if(this.adapter.rpc.ready)try{await this.connectRpc();}catch{}this.recoveryTimer=setInterval(()=>{if(!document.hidden)this.refresh(this.adapter.rpc.ready).catch(()=>{});},5000);this.render();}
@@ -54,9 +54,9 @@ export class FactoryMiningViewV4 extends GoalMiningView {
   }
   ui(){
     const p=this.state.value.preparation,f=this.snapshot?.factory;
-    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn:!!this.financial.login,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
+    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn:!!this.financial.login,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
     if(this.adapter&&!this.adapter.rpc.ready&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused))return {state:'rpc-required',button:this.adapter.rpc.busy?'checking-rpc':'configure-rpc',disabled:this.adapter.rpc.busy||!!this.actionBusy,action:'configure-rpc',pendingOutputs:0};
-    if(!this.preparing&&!this.runner.running&&!this.pending.length&&!['connect-wallet','sign-in','none'].includes(ui.action)&&(f?.paused||[2,3].includes(f?.state)))return {state:f.paused?'contract-paused':'research-stage-complete',button:'check-new-tasks',disabled:!!this.actionBusy,action:'sync',pendingOutputs:0};
+    if(!this.preparing&&!this.runner.running&&!this.pending.length&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action)&&(f?.paused||[2,3].includes(f?.state)))return {state:f.paused?'contract-paused':'research-stage-complete',button:'check-new-tasks',disabled:!!this.actionBusy,action:'sync',pendingOutputs:0};
     return ui;
   }
   render(){

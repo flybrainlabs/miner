@@ -7,7 +7,7 @@ export function goalAvailability({network,online,snapshot,serverNow}){
   if(serverNow>=snapshot.round.pre.claimDeadline)return 'new-claims-closed';
   return 'open';
 }
-export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false,fundingGate=null}){
+export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,modelReady,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false,fundingGate=null}){
   const result=(state,button,disabled=false,action='start')=>({state,button,disabled,action,pendingOutputs});
   if(preparing)return result('preparing:'+preparation,'pause-preparation',false,'pause-preparation');
   if(running&&!paused)return result(snapshot?.round?'running':'waiting-next-goal','pause-mining',false,'pause');
@@ -19,6 +19,8 @@ export function deriveGoalUiState({network,online,snapshot,serverNow,preparation
   if(walletRequired&&!walletConnected)return result('wallet-required','connect-wallet',actionBusy,'connect-wallet');
   if(walletRequired&&!walletSignedIn)return result('wallet-login-required','sign-in',actionBusy,'sign-in');
   if(preparation==='unsupported')return result('unsupported','unsupported',true,'none');
+  // Preparing a local model neither enters a round nor authorizes computation.
+  if(modelReady===false)return result('preparation-required','prepare-model',actionBusy,'prepare');
   if(!network.enabled)return result('network-unconfigured','network-unconfigured',true,'configure');
   if(!online)return result('authority-disconnected','retry-network',actionBusy,'sync');
   if(snapshot?.state==='CALIBRATION_REQUIRED')return result('calibration-required','calibration-required',true,'sync');

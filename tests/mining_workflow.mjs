@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {miningWorkflow} from '../web/mining-workflow.mjs';
 import {createMinerState} from '../web/miner-state.mjs';
+import {deriveGoalUiState} from '../web/goal-ui-state.mjs';
 const state=createMinerState();
 assert.equal(miningWorkflow(state.value.preparation).step,'download');
 state.update('preparation',{phase:'fetching'});
@@ -18,4 +19,11 @@ assert.equal(miningWorkflow({phase:'needed',inventory:{model:true}}).reused,true
 assert.equal(miningWorkflow({phase:'ready'},{ready:true}).step,'mining');
 assert.equal(miningWorkflow({phase:'paused',resumePhase:'ready',inventory:{model:true}},{ready:false}).step,'build');
 assert.equal(miningWorkflow({phase:'loading'},{running:true}).step,'mining');
+const entry={network:{enabled:true},online:true,snapshot:{round:{pre:{claimDeadline:10}}},serverNow:20,preparation:'needed',modelReady:false,walletRequired:true,walletConnected:true,walletSignedIn:true};
+for(const snapshot of [entry.snapshot,null,{state:'RESEARCH_STAGE_COMPLETE'},{state:'PAUSED'},{state:'CALIBRATION_REQUIRED'}])assert.equal(deriveGoalUiState({...entry,snapshot}).action,'prepare');
+assert.equal(deriveGoalUiState({...entry,online:false}).action,'prepare');
+assert.equal(deriveGoalUiState({...entry,walletConnected:false}).action,'connect-wallet');
+assert.equal(deriveGoalUiState({...entry,walletSignedIn:false}).action,'sign-in');
+assert.equal(deriveGoalUiState({...entry,pendingOutputs:1}).action,'retry-save');
+assert.equal(deriveGoalUiState({...entry,modelReady:true,preparation:'ready'}).state,'new-claims-closed');
 console.log('Three real mining stages, cached model, download/build interruption: passed');
