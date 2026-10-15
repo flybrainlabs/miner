@@ -148,7 +148,9 @@
     "web/factory-wallet-v4.mjs": "web/factory-wallet-v4.mjs",
     "web/factory-mining-v4.mjs": "web/factory-mining-v4.mjs",
     "tests/factory_storage_v4.mjs": "tests/factory_storage_v4.mjs",
-    "web/factory-mining-view-v4.mjs": "web/factory-mining-view-v4.mjs"
+    "web/factory-mining-view-v4.mjs": "web/factory-mining-view-v4.mjs",
+    "web/miner-rpc-settings-v4.mjs": "web/miner-rpc-settings-v4.mjs",
+    "web/miner-rpc-settings-v4.css": "web/miner-rpc-settings-v4.css"
   },
   "project": "flybrainlabs"
 }

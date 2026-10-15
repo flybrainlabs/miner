@@ -1,0 +1,16 @@
+.research-app .miner-rpc-settings { margin:1rem 0; padding:.7rem .8rem; border:1px solid #3b3b3b; border-radius:8px; min-width:0; background:#161616; }
+.miner-rpc-settings summary { display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-size:.85rem; font-weight:600; }
+.miner-rpc-settings .rpc-mode { font-size:.72rem; font-weight:400; color:#aaa; }
+.miner-rpc-settings .rpc-guide { margin:.75rem 0; padding-left:1.3rem; font-size:.8rem; line-height:1.6; }
+.miner-rpc-settings .rpc-guide a { color:#eee; text-decoration:underline; text-underline-offset:3px; }
+.miner-rpc-settings label { display:block; font-size:.8rem; line-height:1.5; }
+.miner-rpc-settings .rpc-address { display:flex; align-items:stretch; gap:.4rem; margin-top:.4rem; min-width:0; }
+.miner-rpc-settings .rpc-address input { box-sizing:border-box; width:100%; min-width:0; padding:.65rem; border:1px solid #555; border-radius:5px; font-size:.8rem; background:#101010; color:#eee; }
+.miner-rpc-settings .rpc-address .button { flex-shrink:0; margin:0; min-height:44px; padding:.4rem .65rem; font-size:.78rem; }
+.miner-rpc-settings label.rpc-remember { display:flex; align-items:center; gap:.5rem; margin:.7rem 0; }
+.miner-rpc-settings .rpc-remember input { width:1rem; height:1rem; margin:0; }
+.miner-rpc-settings .rpc-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
+.miner-rpc-settings .rpc-actions .button { margin:0; min-height:44px; font-size:.8rem; }
+.miner-rpc-settings .rpc-status { margin:.7rem 0 0; color:#c9c9c9; font-size:.78rem; overflow-wrap:anywhere; }
+.miner-rpc-settings .rpc-status[data-error=true] { color:#ffcfb0; }
+.miner-rpc-settings input:focus-visible,.miner-rpc-settings button:focus-visible,.miner-rpc-settings summary:focus-visible { outline:2px solid #eee; outline-offset:3px; }
