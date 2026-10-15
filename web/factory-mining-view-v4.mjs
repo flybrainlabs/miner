@@ -8,7 +8,7 @@ import {MinerRpcSettingsV4} from './miner-rpc-settings-v4.mjs';
 import {FactoryMiningClientV4,FactorySubmissionV4,factoryWalletAdapter} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
-Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model']});
+Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model'],'contract-task-expired':['本轮已超时 · 可按合约规则接续','Task expired · contract recovery available'],'contract-result-ready':['已有通过验证的候选 · 可完成结算','Verified candidate ready · finalize the result'],'contract-task-ready':['下一项预设任务待开启','Next predefined task ready to open'],'recover-contract-task':['接续合约任务','Continue contract task'],'finalize-contract-result':['完成候选结算','Finalize verified result'],'contract-empty-window':['新承诺已截止 · 本轮暂无候选','Claims closed · no candidates this attempt']});
 export class FactoryMiningViewV4 extends GoalMiningView {
   constructor({factory,financial,...options}){
     if(!financial?.availableWallets)throw new Error('The shared wallet connection is unavailable');
@@ -56,8 +56,15 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     const p=this.state.value.preparation,f=this.snapshot?.factory;
     const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn:!!this.financial.login,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
     if(this.adapter&&!this.adapter.rpc.ready&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused))return {state:'rpc-required',button:this.adapter.rpc.busy?'checking-rpc':'configure-rpc',disabled:this.adapter.rpc.busy||!!this.actionBusy,action:'configure-rpc',pendingOutputs:0};
+    const recovery=this.snapshot?.recovery;
+    if(recovery&&this.adapter?.rpc.ready&&this.client.online&&this.financial.login&&!this.preparing&&!this.pending.length&&(!this.runner.running||this.runner.paused)&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action))return {state:recovery.kind==='expire'?'contract-task-expired':recovery.kind==='finalize'?'contract-result-ready':'contract-task-ready',button:recovery.kind==='finalize'?'finalize-contract-result':'recover-contract-task',disabled:!!this.actionBusy||!!this.recovering,action:'recover-contract-task',pendingOutputs:0};
+    if(ui.state==='new-claims-closed'&&this.snapshot?.task?.queue.length===0)return {...ui,state:'contract-empty-window',button:'contract-empty-window'};
     if(!this.preparing&&!this.runner.running&&!this.pending.length&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action)&&(f?.paused||[2,3].includes(f?.state)))return {state:f.paused?'contract-paused':'research-stage-complete',button:'check-new-tasks',disabled:!!this.actionBusy,action:'sync',pendingOutputs:0};
     return ui;
+  }
+  async recoverContractTask(){
+    this.adapter.assertMiningAuthorization();if(this.recovering)return;this.recovering=true;this.render();
+    try{await this.client.recoverTask();await this.refresh(true);}finally{this.recovering=false;this.render();}
   }
   render(){
     if(!this.runner)return;showMiningStage(document,miningWorkflow(this.state.value.preparation,{ready:this.runtime.ready,running:this.runner.running,pendingOutputs:this.pending.length}));super.render();this.rpcSettings?.render();const f=this.snapshot?.factory,t=this.snapshot?.task,r=this.snapshot?.round;this.financial.factorySnapshot=this.snapshot;
@@ -69,6 +76,14 @@ export class FactoryMiningViewV4 extends GoalMiningView {
       const ui=this.ui();setMiningButtonLabel($('miner-primary'),label(ui.button));$('miner-primary').disabled=ui.disabled;$('miner-status').textContent=label('rpc-required');$('miner-target-state').textContent=label('rpc-required');
       $('miner-guidance').hidden=false;$('miner-guidance').textContent=say('设置并验证自己的 Helius API Key 后，再连接钱包、准备模型和挖矿。网络自动选择。','Set and verify your Helius API key, then connect your wallet, prepare the model and mine. The network is selected automatically.');
       $('miner-step-note').hidden=false;$('miner-step-note').textContent=say('请先完成上方的 RPC 设置。','Complete the RPC setup above first.');
+    }
+    if(this.ui().action==='recover-contract-task'){
+      const ui=this.ui();$('miner-status').textContent=label(ui.state);$('miner-target-state').textContent=label(ui.state);$('miner-goal-progress').textContent=label(ui.state);setMiningButtonLabel($('miner-primary'),this.recovering?say('等待钱包确认或链上确认…','Waiting for wallet or chain confirmation…'):label(ui.button));$('miner-primary').disabled=ui.disabled;
+      $('miner-guidance').hidden=false;$('miner-guidance').textContent=this.snapshot.recovery.kind==='finalize'?say('确认钱包交易，按已通过的验证结果完成合约裁决。','Confirm the wallet transaction to finalize the verified result.'):say('确认钱包交易，由合约按预设规则重试当前任务或开启下一项。','Confirm the wallet transaction. The contract retries this task or opens the next predefined task under its frozen rules.');
+      $('miner-step-note').hidden=false;$('miner-step-note').textContent=say('本机模型和计算记录会保留。接续完成后即可开始挖矿。','Your model and saved results are retained. Start mining after recovery completes.');
+    }else if(this.ui().state==='contract-empty-window'){
+      $('miner-status').textContent=label('contract-empty-window');$('miner-target-state').textContent=label('contract-empty-window');$('miner-goal-progress').textContent=label('contract-empty-window');
+      $('miner-guidance').hidden=false;$('miner-guidance').textContent=say('本轮没有候选；验证期限结束后可按合约规则接续任务。','This attempt has no candidates. Contract recovery becomes available after its verification deadline.');
     }
     if($('wallet-mining-round-budget'))$('wallet-mining-round-budget').textContent=t?say('本任务获胜解奖励：','Reward for this task’s winning solution: ')+atoms(t.descriptor.rewardAtoms)+' FBW':say('等待合约开放下一个预设任务','Waiting for the contract to open the next predefined task');
     const own=this.rows.find(m=>m.roundId===r?.roundId&&m.factoryV4?.submission);
