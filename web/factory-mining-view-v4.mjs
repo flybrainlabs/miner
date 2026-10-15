@@ -10,7 +10,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     if(!financial?.availableWallets)throw new Error('The shared wallet connection is unavailable');
     const adapter=factoryWalletAdapter({deployment:factory,session:financial}),network={...options.network,...factory,protocolVersion:4,networkId:factory.genesisHash,campaignId:factory.factory,authorityId:factory.policyHash};
     const bindings={client:callbacks=>new FactoryMiningClientV4({deployment:factory,...adapter,...callbacks}),submission:(client,store,onChange)=>new FactorySubmissionV4(client,store,onChange)};
-    super({...options,network,financial,bindings});this.factoryDeployment=factory;this.adapter=adapter;this.client.assertMiningAuthorization=adapter.assertMiningAuthorization;this.taskHistory=[];
+    super({...options,network,financial,bindings});this.factoryDeployment=factory;this.adapter=adapter;this.client.assertMiningAuthorization=adapter.assertMiningAuthorization;this.taskHistory=[];this.submissionRetryAt=new Map();
     this.factoryWalletChanged=()=>{const prior=this.client.identity?.publicKey;this.client.bindWallet();if(this.runner.running&&(prior!==this.client.identity?.publicKey||!financial.login))this.runner.pauseNow(prior!==this.client.identity?.publicKey?'wallet-changed':'wallet-login-required');this.render();this.onChange?.();};financial.addEventListener('change',this.factoryWalletChanged);
     $('miner-target-sync').onclick=()=>this.client.sync().then(()=>this.refresh(true)).catch(this.onError);
     $('miner-round-history-next').hidden=true;
@@ -21,8 +21,12 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     try{
       this.rows=await this.store.list();this.pending=await retainedCandidateOutputs(this.network,this.store);const outputs=new Map(this.pending.map(x=>[x.task.trialId,x]));for(const r of this.runner.pendingResults.values())outputs.set(r.task.trialId,r);this.pending=[...outputs.values()];
       if(reconcile&&this.client.online){
-        for(const m of this.rows)if(m.factoryV4?.submission&&(!m.terminalCompetition||m.won&&!m.rewardPaid))try{await this.submission.reconcile(m);}catch(error){m.submissionError=error.message;}
-        if(Date.now()-(this.historyAt||0)>15000||this.historyNext!==this.client.factory?.nextIndex){const previous=this.taskHistory||[],next=[],f=this.client.factory;for(let i=0;i<(f?.uploaded||0);i++){const saved=previous.find(t=>t.index===i);next.push(saved&&(saved.paid||saved.state===0&&i>=f.nextIndex)?saved:await this.client.reader.task(i));}this.taskHistory=next;this.historyAt=Date.now();this.historyNext=f?.nextIndex;}
+        for(const m of this.rows){
+          if(m.factoryV4?.submission&&(!m.terminalCompetition||m.won&&!m.rewardPaid))try{await this.submission.reconcile(m);}catch(error){m.submissionError||=error.message;}
+          const retryable=['candidate-saved-passing-awaiting-submit','submitting-commitment','committed','uploading','revealing'].includes(m.phase),claimOpen=this.client.serverNow<Number(m.round.pre.claimDeadline),committed=['committed','uploading','revealing'].includes(m.phase);
+          if(m.sciencePassed&&!m.terminalCompetition&&retryable&&(claimOpen||committed)&&this.financial.login&&(!m.factoryV4||m.factoryV4.miner===this.client.identity?.publicKey)&&Date.now()-(this.submissionRetryAt.get(m.candidateId)||0)>=15000){this.submissionRetryAt.set(m.candidateId,Date.now());this.submission.submit(m.candidateId).catch(async error=>{const latest=await this.store.metadata(m.candidateId);latest.submissionError=error.message;await this.store.update(latest);});}
+        }
+        if(Date.now()-(this.historyAt||0)>15000||this.historyNext!==this.client.factory?.nextIndex){const previous=this.taskHistory||[],next=[],f=this.client.factory;for(let i=0;i<(f?.uploaded||0);i++){const saved=previous.find(t=>t.index===i);try{next.push(saved&&(saved.paid||saved.state===0&&i>=f.nextIndex)?saved:await this.client.reader.task(i));}catch{if(saved)next.push(saved);}}this.taskHistory=next;this.historyAt=Date.now();this.historyNext=f?.nextIndex;}
       }
       this.renderResults();this.render();
     }finally{this.refreshing=false;}
