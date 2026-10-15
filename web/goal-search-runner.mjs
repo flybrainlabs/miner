@@ -1,6 +1,7 @@
 import { ObservationFocus } from './observation-focus.mjs';
 import { modelLock } from './preparation-controller.mjs';
 import { candidateId,trialTask,canonical,hex } from './target-protocol-v2.mjs';
+import { factoryTrialTask } from './task-factory-v4-science.mjs';
 import { createInputOrder } from './input-order.mjs';
 import { ComputationLog } from './computation.mjs';
 import { releaseOutput,rememberOutputSaveError } from './pending-output.mjs';
@@ -78,7 +79,7 @@ export class GoalSearchRunner {
     if(e.meta.trials.some((t,j)=>!t.metrics.passed||t.repeatIndex!==j))throw new Error('Only a saved passing background prefix can resume');
     for(;e.j<e.round.pre.requiredBackgrounds;e.j++){
       if(e.cancelled||this.closed.has(e.round.roundId))throw Object.assign(new Error('Search cancelled at safe candidate boundary'),{code:'paused'});
-      const nextTask=await trialTask(e.round,e.meta.input,e.j);
+      const nextTask=await (e.round.pre.protocolVersion===4?factoryTrialTask:trialTask)(e.round,e.meta.input,e.j);
       // Hashing a task is asynchronous. Controls can arrive while no Worker
       // request exists yet, so apply them again before dispatching the task.
       if(e.cancelled||this.closed.has(e.round.roundId)||!this.running)throw Object.assign(new Error('Search cancelled before Worker dispatch'),{code:'paused'});

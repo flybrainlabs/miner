@@ -143,7 +143,11 @@
     "web/vendor/three/LICENSE": "web/vendor/three/LICENSE",
     "web/vendor/three/three.core.min.js": "web/vendor/three/three.core.min.js",
     "web/vendor/three/three.module.min.js": "web/vendor/three/three.module.min.js",
-    "web/work-meter.mjs": "web/work-meter.mjs"
+    "web/work-meter.mjs": "web/work-meter.mjs",
+    "web/factory-submission-v4.mjs": "web/factory-submission-v4.mjs",
+    "web/factory-wallet-v4.mjs": "web/factory-wallet-v4.mjs",
+    "web/factory-mining-v4.mjs": "web/factory-mining-v4.mjs",
+    "tests/factory_storage_v4.mjs": "tests/factory_storage_v4.mjs"
   },
   "project": "flybrainlabs"
 }

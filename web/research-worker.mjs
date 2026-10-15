@@ -9,6 +9,9 @@ import { preparationEvent } from './preparation-progress.mjs';
 import { checkCatalog, taskForIndex } from './catalog-task.mjs';
 import { selectSubnetwork, traceIdentity, decodeTraceRows, traceTransfers, traceSideFile } from './propagation-trace.mjs';
 import { validateRound, trialTask, evaluate as evaluateGoal } from './target-protocol-v2.mjs';
+import { factoryTrialTask } from './task-factory-v4-science.mjs';
+import { readerForDeployment,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
+import { factoryRecord } from './task-factory-result-v4.mjs';
 import { retainOutput, releaseOutput } from './pending-output.mjs';
 import { LiveSnapshotSender, completeWindowBoundary, epochNow } from './live-observation.mjs';
 let instance = null;
@@ -221,12 +224,19 @@ async function identifyFiles(message){
 
 async function validateRun(config,task){
   if(loadedIdentity?.graph!==config.graph_sha256||loadedIdentity?.model!==config.model_sha256||config.time_step_us!==1000||(config.observe_start||0)!==0||(config.parameter_version||'lif-point-v0-dev')!=='lif-point-v0-dev')throw new Error('Unknown frozen scientific configuration');
-  if(task.protocolVersion===2){
-    const response=await fetch('/assets/data/mining-deployment-v1.json',{cache:'no-store'});if(!response.ok)throw new Error('Mining deployment configuration unavailable');const network=validateDeployment(await response.json(),config);
-    const round=await validateRound(operation.round,{networkId:network.networkId,authorityId:network.authorityId}),g=round.goal;
+  if(task.protocolVersion===2||task.protocolVersion===4){
+    let round;
+    if(task.protocolVersion===4){
+      const response=await fetch('/assets/data/task-factory-deployment-v4.json',{cache:'no-store'});if(!response.ok)throw new Error('Task factory deployment unavailable');
+      round=await verifyFactoryRound(readerForDeployment(await response.json()),operation.round);
+    }else{
+      const response=await fetch('/assets/data/mining-deployment-v1.json',{cache:'no-store'});if(!response.ok)throw new Error('Mining deployment configuration unavailable');const network=validateDeployment(await response.json(),config);
+      round=await validateRound(operation.round,{networkId:network.networkId,authorityId:network.authorityId});
+    }
+    const g=round.goal;
     if(config.steps!==g.steps||config.neuron_count!==g.neuronCount||config.graph_sha256!==g.graphRoot||config.model_root_sha256!==g.modelRoot||config.model_sha256!==g.modelDataRoot||config.registry_sha256!==g.registryRoot)throw new Error('V2 science differs from the loaded complete model');
     const view=new DataView(instance.exports.memory.buffer,graph.pointer,graph.length);for(const set of [g.stimulusSet,g.responseSet,g.offTargetSet])for(const m of set)if(view.getBigUint64(52+m.modelIndex*8,true)!==BigInt(m.bodyId))throw new Error('V2 set membership differs from full registry');
-    const expected=await trialTask(round,task.input,task.repeatIndex);for(const k of ['taskId','trialId','roundId','goalId','candidateId','bodyId','targetIndex','repeatIndex','seed'])if(task[k]!==expected[k])throw new Error('V2 trial identity mismatch: '+k);
+    const expected=await (task.protocolVersion===4?factoryTrialTask:trialTask)(round,task.input,task.repeatIndex);for(const k of ['taskId','trialId','roundId','goalId','candidateId','bodyId','targetIndex','repeatIndex','seed'])if(task[k]!==expected[k])throw new Error('Scientific trial identity mismatch: '+k);
     if(JSON.stringify(task.stimulus)!==JSON.stringify(expected.stimulus))throw new Error('V2 stimulus mismatch');return;
   }
   let saved=catalogs.get(config.task_catalog_sha256);
@@ -300,12 +310,13 @@ async function run(message) {
     const bodyIndex=body=>{const view=graphView();let low=0,high=config.neuron_count;while(low<high){const mid=Math.floor((low+high)/2);if(view.getBigUint64(52+mid*8,true)<body)low=mid+1;else high=mid;}return low<config.neuron_count&&view.getBigUint64(52+low*8,true)===body?low:-1;};
     let bundle=archive instanceof Blob?await buildRecordFile(archive,config,task,bodyIndex,resultHash):await buildRecord(archive,config,task,bodyIndex,resultHash);
     if(task.protocolVersion===2)bundle=await targetRecord(bundle,task,operation.round);
+    if(task.protocolVersion===4)bundle=await factoryRecord(bundle,task,operation.round);
     trace.resultRoot=resultHash;trace.coverage.complete=true;trace.coverage.lastStep=config.steps-1;trace.transfers=traceTransfers(trace);
     const side=await traceSideFile(trace);
     const transfers=[bundle.previewBytes.buffer,bundle.manifestBytes.buffer,side.bytes.buffer,side.manifestBytes.buffer];if(archive instanceof ArrayBuffer)transfers.push(archive);
     const result={type:'result',bodyId:task.bodyId,task,config,record:bundle.record,preview:bundle.preview,previewBytes:bundle.previewBytes.buffer,manifestBytes:bundle.manifestBytes.buffer,previewRoot:bundle.previewRoot,archiveRoot:bundle.archiveRoot,
       archive,responseBytes:length,temporary,trace,traceBytes:side.bytes.buffer,traceManifestBytes:side.manifestBytes.buffer,resultHash,elapsedMs:Math.round(performance.now()-started),computation:computation.snapshot('results'),memoryReport:{wasmCapacityBytes:core.memory.buffer.byteLength,scope:'linear memory capacity, not peak process RSS'}};
-    if(task.protocolVersion===2)result.goalMetrics=await evaluateGoal(operation.round.goal,task.input,archive);
+    if(task.protocolVersion===2||task.protocolVersion===4)result.goalMetrics=await evaluateGoal(operation.round.goal,task.input,archive);
     try{await retainOutput(result,operation);}catch(error){result.stagingMetadataError=error.message;}
     post(result,transfers);
   } catch(error) {

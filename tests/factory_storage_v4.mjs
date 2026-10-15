@@ -1,0 +1,23 @@
+// Real OPFS interface fixture, explicit synthetic scientific bytes.
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {Directory} from './opfs_fixture.mjs';
+import {CandidateStoreV2} from '../web/candidate-store-v2.mjs';
+import {buildRecord} from '../web/response-record.mjs';
+import {factoryRecord,validateFactoryRecord} from '../web/task-factory-result-v4.mjs';
+import {descriptorFor,makeRound,factoryTrialTask} from '../web/task-factory-v4-science.mjs';
+import {candidateId,evaluate} from '../web/target-protocol-v2.mjs';
+const vector=JSON.parse(await readFile('tests/vectors/target-v2.json')),config=JSON.parse(await readFile('web/data/research-profiles/duration256-v1-dev/config.json')),spec={schema:'flybrainlabs-scientific-task-v4',goal:vector.goal,seeds:['0000000000000001','0000000000000002']};
+const descriptor=await descriptorFor(spec,{rewardAtoms:'100',claimSeconds:10,revealSeconds:20,verifySeconds:30,maxAttempts:2}),round=await makeRound({program:'fixture-program',genesis:'fixture-network',factoryAddress:'fixture-factory',taskAddress:'fixture-task',factory:{},task:{index:0,attempt:0,descriptor,openedAt:1n,claimDeadline:11n,revealDeadline:21n,verifyDeadline:31n},spec});
+const disk=new Directory();Object.defineProperty(globalThis,'navigator',{value:{storage:{getDirectory:async()=>disk}},configurable:true});
+const network={protocolVersion:4,networkId:'fixture-network',campaignId:'fixture-factory'},store=new CandidateStoreV2(network);store.config=config;
+const task=await factoryTrialTask(round,vector.input,0),meta=await store.begin(round,vector.input,await candidateId(round.roundId,vector.input)),bytes=new Uint8Array(480),view=new DataView(bytes.buffer);
+bytes.set(new TextEncoder().encode('FBRP1\0\0\0'));for(const [at,n]of [[8,config.neuron_count],[12,task.targetIndex],[16,256]])view.setUint32(at,n,true);
+const bundle=await factoryRecord(await buildRecord(bytes,config,task,b=>vector.goal.stimulusSet.find(x=>x.bodyId===String(b)).modelIndex),task,round),result={...bundle,task,config,archive:new Blob([bytes]),responseBytes:480,resultHash:bundle.resultRoot,goalMetrics:await evaluate(vector.goal,vector.input,bytes)};
+await store.saveTrial(meta,result);const restored=new CandidateStoreV2(network);restored.config=config;
+const loaded=await restored.bundle(await restored.metadata(meta.candidateId));assert.equal(loaded.task.protocolVersion,4);assert.equal(loaded.record.schema,'flybrainlabs-target-response-record-v4');assert.deepEqual(new Uint8Array(await loaded.archive.arrayBuffer()),bytes);
+assert.throws(()=>validateFactoryRecord({...loaded.record,protocolVersion:2},meta,meta.trials[0],task));
+assert.equal((await new CandidateStoreV2({networkId:'fixture-network',authorityId:'fixture-factory'}).list()).length,0);
+assert.equal((await new CandidateStoreV2({...network,campaignId:'other-factory'}).list()).length,0);assert.equal((await restored.list()).length,1);
+const exported=await restored.exportFiles(meta);assert.equal(JSON.parse(await exported[0].data.text()).schema,'flybrainlabs-candidate-export-v4');
+console.log(JSON.stringify({passed:true,checks:['V4 complete archive survives store recreation','V4 records and export keep explicit schemas','V2 and other factory OPFS data remain isolated'],scientificFixtures:true}));

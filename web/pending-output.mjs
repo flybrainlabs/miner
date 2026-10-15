@@ -25,11 +25,11 @@ export async function retainedOutputs(){let d;try{d=await dir();}catch{return []
 export async function retainedCandidateOutputs(network,store){
   const selected=[];
   for(const r of await retainedOutputs()){
-    if(r.task?.protocolVersion!==2||r.networkId&&r.networkId!==network.networkId||r.authorityId&&r.authorityId!==network.authorityId)continue;
+    if(r.task?.protocolVersion!==(network.protocolVersion===4?4:2)||r.networkId&&r.networkId!==network.networkId||r.authorityId&&r.authorityId!==network.authorityId)continue;
     // Older metadata lacked the namespace. Require its existing candidate's
     // frozen round to match; unrelated outputs remain on disk, never deleted.
     let m;try{m=await store.metadata(r.task.candidateId);}catch(e){if(e.name==='NotFoundError')continue;throw e;}
-    if(m.round?.pre?.networkId===network.networkId&&m.round.pre.authorityId===network.authorityId&&m.roundId===r.task.roundId&&m.goalId===r.task.goalId)selected.push(r);
+    if(m.round?.pre?.networkId===network.networkId&&(network.protocolVersion===4?m.round.pre.factoryAddress===network.campaignId:m.round.pre.authorityId===network.authorityId)&&m.roundId===r.task.roundId&&m.goalId===r.task.goalId)selected.push(r);
   }
   return selected;
 }

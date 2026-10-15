@@ -24,7 +24,7 @@ export function selectSubnetwork(graph,model,n,target,{cells=32,edges=128}={}){
 }
 export function traceIdentity(config,task,executionId,subnet){
   return {schema:TRACE_VERSION,traceVersion:1,executionId,taskId:task.taskId,resultRoot:null,
-    ...(task.protocolVersion===2?{protocolVersion:2,roundId:task.roundId,goalHash:task.goalId,candidateId:task.candidateId,trialId:task.trialId}:{}),
+    ...([2,4].includes(task.protocolVersion)?{protocolVersion:task.protocolVersion,roundId:task.roundId,goalHash:task.goalId,candidateId:task.candidateId,trialId:task.trialId}:{}),
     registryRoot:config.registry_sha256,graphRoot:config.graph_sha256,modelRoot:config.model_root_sha256,
     parameterVersion:config.parameter_version||'lif-point-v0-dev',timeStepUs:config.time_step_us,observeStart:config.observe_start||0,steps:config.steps,stimulus:task.stimulus,seedHex:task.seed.toString(16).padStart(16,'0'),
     selectionPolicy:'csr-bfs-target-ascending-neighbor-v1; spanning edges first, then actual induced CSR edges',
