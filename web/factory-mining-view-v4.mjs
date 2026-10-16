@@ -19,7 +19,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     const number=document.createElement('span');number.className='miner-step-number';number.textContent='1';this.rpcStepLabel=document.createElement('span');this.rpcStep.append(number,this.rpcStepLabel);document.querySelector('.miner-step-tabs').prepend(this.rpcStep);this.rpcStep.onclick=()=>this.rpcSettings.focus();
     for(const [index,step]of MINING_STEPS.entries())$('miner-step-'+step).querySelector('.miner-step-number').textContent=String(index+2);
     this.rpcSettings=new MinerRpcSettingsV4({rpc:adapter.rpc,parent:document.querySelector('.miner-primary-panel .miner-main-actions'),onStateChange:()=>this.rpcStateChanged(),onChange:()=>this.connectRpc()});
-    this.factoryWalletChanged=()=>{const prior=this.client.identity?.publicKey;this.client.bindWallet();if(this.runner.running&&(prior!==this.client.identity?.publicKey||!financial.login))this.runner.pauseNow(prior!==this.client.identity?.publicKey?'wallet-changed':'wallet-login-required');this.render();this.onChange?.();};financial.addEventListener('change',this.factoryWalletChanged);
+    this.factoryWalletChanged=()=>{const prior=this.client.identity?.publicKey;this.client.bindWallet();if(this.runner.running&&(prior!==this.client.identity?.publicKey||!adapter.isSignedIn()))this.runner.pauseNow(prior!==this.client.identity?.publicKey?'wallet-changed':'wallet-login-required');this.render();this.onChange?.();};financial.addEventListener('change',this.factoryWalletChanged);
     $('miner-target-sync').onclick=()=>{if(!adapter.rpc.ready)return this.rpcSettings.focus();return this.client.sync().then(()=>this.refresh(true)).catch(this.onError);};
     $('miner-round-history-next').hidden=true;
   }
@@ -33,7 +33,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
   async connectRpc(){
     if(!this.adapter.rpc.ready){this.rpcStateChanged();await this.refresh();return;}
     await this.client.syncing?.catch(()=>{});
-    try{await this.client.initialize();this.financial.factoryRentQuote=String(await this.client.reader.connection.getMinimumBalanceForRentExemption(768,'finalized'));if(this.financial.login)await this.financial.refresh().catch(()=>{});await this.refresh(true);}
+    try{await this.client.initialize();this.financial.factoryRentQuote=String(await this.client.reader.connection.getMinimumBalanceForRentExemption(768,'finalized'));if(this.adapter.isSignedIn())await this.financial.refresh().catch(()=>{});await this.refresh(true);}
     catch(error){this.client.disconnected(error);if(this.adapter.rpc.ready)this.client.startPolling();throw error;}
   }
   async initialize(){this.client.bindWallet();await this.adapter.rpc.initialize();await this.refresh();if(this.adapter.rpc.ready)try{await this.connectRpc();}catch{}this.recoveryTimer=setInterval(()=>{if(!document.hidden)this.refresh(this.adapter.rpc.ready).catch(()=>{});},5000);this.render();}
@@ -45,7 +45,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
         for(const m of this.rows){
           if(m.factoryV4?.submission&&(!m.terminalCompetition||m.won&&!m.rewardPaid))try{await this.submission.reconcile(m);}catch(error){m.submissionError||=error.message;}
           const retryable=['candidate-saved-passing-awaiting-submit','submitting-commitment','committed','uploading','revealing'].includes(m.phase),claimOpen=this.client.serverNow<Number(m.round.pre.claimDeadline),committed=['committed','uploading','revealing'].includes(m.phase);
-          if(m.sciencePassed&&!m.terminalCompetition&&retryable&&(claimOpen||committed)&&this.financial.login&&(!m.factoryV4||m.factoryV4.miner===this.client.identity?.publicKey)&&Date.now()-(this.submissionRetryAt.get(m.candidateId)||0)>=15000){this.submissionRetryAt.set(m.candidateId,Date.now());this.submission.submit(m.candidateId).catch(async error=>{const latest=await this.store.metadata(m.candidateId);latest.submissionError=error.message;await this.store.update(latest);});}
+          if(m.sciencePassed&&!m.terminalCompetition&&retryable&&(claimOpen||committed)&&this.adapter.isSignedIn()&&(!m.factoryV4||m.factoryV4.miner===this.client.identity?.publicKey)&&Date.now()-(this.submissionRetryAt.get(m.candidateId)||0)>=15000){this.submissionRetryAt.set(m.candidateId,Date.now());this.submission.submit(m.candidateId).catch(async error=>{const latest=await this.store.metadata(m.candidateId);latest.submissionError=error.message;await this.store.update(latest);});}
         }
         if(Date.now()-(this.historyAt||0)>15000||this.historyNext!==this.client.factory?.nextIndex){const previous=this.taskHistory||[],next=[],f=this.client.factory;for(let i=0;i<(f?.uploaded||0);i++){const saved=previous.find(t=>t.index===i);try{next.push(saved&&(saved.paid||saved.state===0&&i>=f.nextIndex)?saved:await this.client.reader.task(i));}catch{if(saved)next.push(saved);}}this.taskHistory=next;this.historyAt=Date.now();this.historyNext=f?.nextIndex;}
       }
@@ -53,11 +53,11 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     }finally{this.refreshing=false;}
   }
   ui(){
-    const p=this.state.value.preparation,f=this.snapshot?.factory;
-    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn:!!this.financial.login,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
+    const p=this.state.value.preparation,f=this.snapshot?.factory,walletSignedIn=!!this.adapter?.isSignedIn();
+    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
     if(this.adapter&&!this.adapter.rpc.ready&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused))return {state:'rpc-required',button:this.adapter.rpc.busy?'checking-rpc':'configure-rpc',disabled:this.adapter.rpc.busy||!!this.actionBusy,action:'configure-rpc',pendingOutputs:0};
     const recovery=this.snapshot?.recovery;
-    if(recovery&&this.adapter?.rpc.ready&&this.client.online&&this.financial.login&&!this.preparing&&!this.pending.length&&(!this.runner.running||this.runner.paused)&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action))return {state:recovery.kind==='expire'?'contract-task-expired':recovery.kind==='finalize'?'contract-result-ready':'contract-task-ready',button:recovery.kind==='finalize'?'finalize-contract-result':'recover-contract-task',disabled:!!this.actionBusy||!!this.recovering,action:'recover-contract-task',pendingOutputs:0};
+    if(recovery&&this.adapter?.rpc.ready&&this.client.online&&walletSignedIn&&!this.preparing&&!this.pending.length&&(!this.runner.running||this.runner.paused)&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action))return {state:recovery.kind==='expire'?'contract-task-expired':recovery.kind==='finalize'?'contract-result-ready':'contract-task-ready',button:recovery.kind==='finalize'?'finalize-contract-result':'recover-contract-task',disabled:!!this.actionBusy||!!this.recovering,action:'recover-contract-task',pendingOutputs:0};
     if(ui.state==='new-claims-closed'&&this.snapshot?.task?.queue.length===0)return {...ui,state:'contract-empty-window',button:'contract-empty-window'};
     if(!this.preparing&&!this.runner.running&&!this.pending.length&&!['connect-wallet','sign-in','none','prepare'].includes(ui.action)&&(f?.paused||[2,3].includes(f?.state)))return {state:f.paused?'contract-paused':'research-stage-complete',button:'check-new-tasks',disabled:!!this.actionBusy,action:'sync',pendingOutputs:0};
     return ui;
