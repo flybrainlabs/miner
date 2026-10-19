@@ -46,6 +46,15 @@ export class ComputationLog {
 }
 
 export const COMPUTATION_STAGES={validating:'Checking experiment inputs',simulation:'Simulating the complete network',paused:'Task paused in memory; continue explicitly',results:'Building the response archive',saving:'Saving the computed result',complete:'Experiment completed',stopped:'Stopped; this task must start again',error:'Computation needs attention'};
+export const COMPUTATION_ACTIVITY={idle:'Not running',paused:'Mining paused','waiting-connection':'Waiting for connection','waiting-next-goal':'Waiting for new tasks','waiting-contract':'Waiting for contract window','catalog-exhausted':'Task catalog exhausted','contract-paused':'Mining service paused','input-domain-exhausted':'All inputs tested; waiting for another task','selecting-input':'Selecting next input',saving:'Saving the computed result'};
+const activityChinese={'waiting-connection':'等待网络恢复','waiting-next-goal':'等待新任务','waiting-contract':'等待合约窗口','catalog-exhausted':'任务目录已用完','contract-paused':'挖矿服务已暂停','input-domain-exhausted':'本轮输入已测完，等待其他任务','selecting-input':'正在选择下一项输入'};
+export function computationActivity(execution,active){
+  if(!active)return execution.phase==='paused'?'paused':'idle';
+  if(execution.activity)return execution.activity;
+  if(Array.isArray(execution.tasksByExecution)&&!execution.tasksByExecution.length)return 'waiting-next-goal';
+  return execution.phase==='saving'?'saving':'computing';
+}
+COMPUTATION_ACTIVITY['waiting-inputs']='Waiting for an available input';activityChinese['waiting-inputs']='等待可领取的计算输入';
 const seconds=ms=>Number.isFinite(ms)?(ms/1000).toFixed(1):'—';
 export function computationLogText(report,t=s=>s,locale='en') {
   const count=n=>Number(n).toLocaleString(locale,{maximumFractionDigits:0});
@@ -74,11 +83,12 @@ export class ComputationView {
     this.timer=setInterval(()=>{if(this.active&&this.last)this.elapsed();},250);
   }
   number(n){return Number(n).toLocaleString(this.locale(),{maximumFractionDigits:0});}
+  activityLabel(activity){const source=COMPUTATION_ACTIVITY[activity]||'No active computation',translated=this.t(source);return translated===source&&String(this.locale()).startsWith('zh')&&activityChinese[activity]?activityChinese[activity]:translated;}
   rate(n,unit){return Number.isFinite(n)?this.t('{rate} {unit}',{rate:compactNumber(n,{locale:this.locale()}).text,unit:this.t(unit)}):this.t('Measuring');}
   elapsed(){this.$('miner-compute-elapsed').textContent=this.t('{seconds} s',{seconds:seconds(this.last.elapsedMs+(this.active?performance.now()-this.lastReceived:0))});}
   render(execution,active,visible=true) {
-    const m=execution.telemetry,report=this.log.summary();this.$('miner-computation').hidden=!visible;
-    this.active=!!active&&!!m&&!['complete','stopped','error','paused'].includes(m.stage);
+    const m=execution.telemetry,report=this.log.summary(),activity=computationActivity(execution,active),computing=active&&activity==='computing';this.$('miner-computation').hidden=!visible;
+    this.active=!!computing&&!!m&&!['complete','stopped','error','paused'].includes(m.stage);
     if(m!==this.last){this.last=m;this.lastReceived=performance.now();}
     this.$('miner-compute-neurons').dataset.unmeasured=String(!m);const bar=this.$('miner-compute-progress');bar.hidden=!m;this.$('miner-compute-stage').hidden=!m;
     if(m){
@@ -105,11 +115,17 @@ export class ComputationView {
     // Primary rate describes the entire pool, including zero work while saving
     // or waiting. It must not depend on the focused worker having a packet.
     const aggregate=execution.aggregate;
-    const measured=!!active&&Number.isFinite(aggregate?.neuronUpdatesPerSecond);
-    this.$('miner-compute-neurons').textContent=!active?this.t(execution.phase==='paused'?'Mining paused':'Not running'):measured?compactNumber(aggregate.neuronUpdatesPerSecond,{locale:this.locale()}).text:this.t('Measuring');
+    const measured=!!computing&&Number.isFinite(aggregate?.neuronUpdatesPerSecond);
+    this.$('miner-compute-neurons').textContent=measured?compactNumber(aggregate.neuronUpdatesPerSecond,{locale:this.locale()}).text:computing?this.t('Measuring'):this.activityLabel(activity);
     const unit=document.querySelector('#miner-computation .metric-unit');if(unit)unit.hidden=!measured;
     this.$('miner-compute-neurons').dataset.unmeasured=String(!measured);
-    if(aggregate){
+    this.$('miner-computation').dataset.activity=activity;
+    if(!computing){
+      this.$('miner-compute-synapses').textContent='';
+      this.$('miner-compute-rate-label').textContent=this.activityLabel(activity);
+      this.$('miner-compute-neurons').title=this.t('Current throughput has no running sample');
+    }
+    if(aggregate&&computing){
       this.$('miner-compute-synapses').textContent=this.rate(aggregate.synapseAdditionsPerSecond,'additions/s');
       this.$('miner-compute-rate-label').textContent=this.t('30 s window')+' · '+this.t('Sampled {seconds} s',{seconds:seconds(aggregate.sampledMs)})+' · '+this.t('5 s recent')+' '+this.rate(aggregate.recentNeuronUpdatesPerSecond,'neuron updates/s')+' · '+this.t('Session average')+' '+this.rate(aggregate.sessionNeuronUpdatesPerSecond,'neuron updates/s');
       const node=this.$('miner-work-counts');if(node)node.textContent=this.t('Actual cumulative work: {neurons} neuron updates; {synapses} synaptic additions.',{neurons:aggregate.totalNeuronUpdates,synapses:aggregate.totalSynapseAdditions});

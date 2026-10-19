@@ -73,6 +73,16 @@ async function end(x){x.runner.stopNow();await x.runner.completion;assert(x.prim
  await new Promise(resolve=>setTimeout(resolve,2300));const old=reports.filter(r=>r.phase==='ended'&&r.sessionId===session);assert.equal(old.length,2);assert.deepEqual(old[0],old[1],'bounded retry retains the old session payload after a new start');
 }
 console.log('V2 coordinator paths: two Workers/focus, UI isolation, save failures, budgets, all-pass boundary, safe cross-round cancellation, stale events, reconnect and crash recovery from durable background prefixes passed (runtime faults simulated).');
+{
+ const x=setup();let busy=true,claims=0,released=0;
+ x.client.reserveInput=async(r,input,sessionId)=>{claims++;return busy?false:{id:'lease-'+claims,sessionId,fence:'1'};};
+ x.client.renewInput=async()=>({ok:true});x.client.releaseInput=async()=>{released++;};
+ await x.runner.start({minutes:10,storageBytes:2e9});await until(()=>x.runner.activity()==='waiting-inputs');
+ assert.equal(x.runner.active.length,0);assert.equal(x.primary.data,undefined);assert(!x.runner.domainExhausted,'held leases are temporary availability, not exhausted science');
+ busy=false;await x.runner.pump();await until(()=>x.runner.active.length>0&&x.runner.active.every(e=>e.slot.runtime.data));
+ assert(x.runner.active.every(e=>e.inputLease));await end(x);assert(released>0,'finished or stopped work releases its own assignment');
+ console.log('Input lease contention keeps the session waiting without CPU; available work resumes and releases its assignment on Stop.');
+}
 
 // Recovering a complete first passing background must re-enter the same running
 // session's queue. A stop/start would mask the original defect.

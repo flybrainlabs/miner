@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { ComputationMeter, ComputationLog, computationLogText } from '../web/computation.mjs';
+import { ComputationMeter, ComputationLog, computationLogText,computationActivity } from '../web/computation.mjs';
 import { TaskRunner } from '../web/task-runner.mjs';
 import { createMinerState } from '../web/miner-state.mjs';
 let now=0;
@@ -25,6 +25,12 @@ assert(text.includes(task.taskId));assert(text.includes('24 neuron updates/s'));
 journal.append('stopped');assert.equal(journal.summary().dropped,1);assert.equal(journal.summary().entries.length,3);
 assert.equal(journal.summary().latest,first);assert(!JSON.stringify(journal.summary()).includes('salt'));
 console.log('Measured simulation counters, timing denominators, ETA scope, stopped rates and bounded log export passed.');
+assert.equal(computationActivity({phase:'selecting',tasksByExecution:[],aggregate:{neuronUpdatesPerSecond:999}},true),'waiting-next-goal');
+assert.equal(computationActivity({phase:'selecting',activity:'waiting-contract',aggregate:{neuronUpdatesPerSecond:999}},true),'waiting-contract');
+assert.equal(computationActivity({phase:'running',activity:'computing'},true),'computing');
+assert.equal(computationActivity({phase:'paused',activity:'computing'},false),'paused');
+assert.equal(computationActivity({phase:'saving'},true),'saving');
+console.log('A live session with no computation exposes its wait state, independently of stale rate samples.');
 
 // Simulated storage boundary: completed science must finish saving even when
 // stop is requested. No subsequent task may be dispatched.

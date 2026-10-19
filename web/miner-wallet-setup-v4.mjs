@@ -1,5 +1,5 @@
 import {say} from './goal-status-text.mjs';
-import {MiningWalletV4,MiningWalletPolicyV4,newMiningMnemonic} from '/assets/vendor/generated/factory-wallet-v4.mjs';
+import {MiningWalletV4,MiningWalletPolicyV4,MiningWalletPoolPolicyV4,newMiningMnemonic} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const el=(tag,text='',cls='')=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;};
 const sol=value=>{const n=BigInt(value||0),fraction=(n%1000000000n).toString().padStart(9,'0').replace(/0+$/,'');return (n/1000000000n).toString()+(fraction?'.'+fraction:'');};
 const messages={
@@ -44,7 +44,7 @@ export class MinerWalletSetupV4 {
   async ensureSession(){
     if(this.sessionPending)return this.sessionPending;
     this.sessionPending=(async()=>{this.vault.assertUnlocked();this.adapter.rpc.assertReady();
-      if(!this.policy||this.policy.address!==this.vault.address){this.policy=new MiningWalletPolicyV4({deployment:this.deployment,connection:this.adapter.connection,address:this.vault.address});this.vault.policy=this.policy;this.policy.addEventListener('change',()=>{this.render();this.onChange();});}
+      if(!this.policy||this.policy.address!==this.vault.address){const Policy=this.deployment.taskPool?.trust?MiningWalletPoolPolicyV4:MiningWalletPolicyV4;this.policy=new Policy({deployment:this.deployment,connection:this.adapter.connection,address:this.vault.address});this.vault.policy=this.policy;this.policy.addEventListener('change',()=>{this.render();this.onChange();});}
       const provider=this.vault.provider();if(this.financial.wallet!==provider||this.financial.account?.address!==this.vault.address)await this.financial.connect(provider);
       if(!this.adapter.isSignedIn()||Number(this.financial.login.expiresAt)<Date.now()/1000+120)await this.financial.signIn();
     })().finally(()=>this.sessionPending=null);return this.sessionPending;
@@ -100,6 +100,7 @@ export class MinerWalletSetupV4 {
     main.append(el('p',say('仅在创建新的提交 PDA 时扣除这笔租金押金，普通计算步骤不扣这笔费用。实际交易还需 Solana 网络手续费，领取奖励时可能需要创建代币账户的押金。所有链上成本从此钱包自动扣除，不设支出预算上限；余额不足时暂停。','The rent deposit is charged only when a new submission PDA is created, not for each computation step. Transactions also incur Solana network fees; receiving rewards may require a token-account deposit. Chain costs are deducted automatically from this wallet without a spending budget; low funds pause mining.'),'field-note'));
     const form=el('form');
     const consent=el('label','','mining-wallet-consent');this.approval=el('input');this.approval.type='checkbox';this.approval.id='mining-wallet-approval';this.approval.required=true;consent.append(this.approval,el('span',say('允许此钱包自动支付当前挖矿合约的账户押金与网络手续费，不设置预算上限。锁定钱包可停止新签名与发送，已广播交易仍可能确认。授权在本浏览器解锁期间有效，锁定或刷新后失效。','Allow this wallet to pay account deposits and network fees automatically for the current mining contract, without a spending budget. Lock the wallet to stop new signatures and sends; broadcast transactions can still confirm. Authorization lasts while this browser wallet is unlocked; locking or reloading revokes it.')));form.append(consent);
+    if(this.deployment.taskPool)consent.querySelector('span').textContent=say('允许此钱包自动支付已核验任务池内的 PDA 押金与 Solana 网络费，不设预算上限。每个新目录须通过固定权威签名、科学范围和链上身份核验。授权在本浏览器解锁期间有效，锁定或刷新后失效；已广播交易仍可能确认。','Allow automatic PDA deposits and Solana network fees for the verified task pool, without a spending budget. Each new catalog must pass the pinned authority signature, scientific scope and chain identity checks. Approval lasts while this browser wallet is unlocked; locking or reloading revokes it. Broadcast transactions can still confirm.');
     this.enable=el('button',say('启用自动支付','Enable automatic payments'),'button');this.enable.id='mining-wallet-enable';this.enable.type='submit';form.append(this.enable);form.onsubmit=event=>{event.preventDefault();this.operate(async()=>{if(!this.approval.checked)throw {code:'MINING_WALLET_APPROVAL'};await this.ensureSession();await this.policy.approve();this.root.open=false;document.getElementById('miner-primary')?.focus();});};main.append(form);
     this.approvedNote=el('p','','mining-wallet-approved');main.append(this.approvedNote);
     main.append(this.button(say('锁定钱包并停止支付','Lock wallet and stop payments'),async()=>this.lock()));grid.append(main,this.costs());this.body.append(grid);

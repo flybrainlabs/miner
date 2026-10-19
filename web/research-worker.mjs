@@ -10,7 +10,7 @@ import { checkCatalog, taskForIndex } from './catalog-task.mjs';
 import { selectSubnetwork, traceIdentity, decodeTraceRows, traceTransfers, traceSideFile } from './propagation-trace.mjs';
 import { validateRound, trialTask, evaluate as evaluateGoal } from './target-protocol-v2.mjs';
 import { factoryTrialTask } from './task-factory-v4-science.mjs';
-import { factoryWorkerReaderV4,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
+import { factoryWorkerPoolReaderV4,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
 import { factoryRecord } from './task-factory-result-v4.mjs';
 import { retainOutput, releaseOutput } from './pending-output.mjs';
 import { LiveSnapshotSender, completeWindowBoundary, epochNow } from './live-observation.mjs';
@@ -228,7 +228,7 @@ async function validateRun(config,task){
     let round;
     if(task.protocolVersion===4){
       const response=await fetch('/assets/data/task-factory-deployment-v4.json',{cache:'no-store'});if(!response.ok)throw new Error('Task factory deployment unavailable');
-      const reader=factoryWorkerReaderV4(await response.json(),operation.factoryReadPort);try{round=await verifyFactoryRound(reader,operation.round);}finally{reader.dispose();}
+      const reader=await factoryWorkerPoolReaderV4(await response.json(),operation.round,operation.factoryReadPort);try{round=await verifyFactoryRound(reader,operation.round);}finally{reader.dispose();}
     }else{
       const response=await fetch('/assets/data/mining-deployment-v1.json',{cache:'no-store'});if(!response.ok)throw new Error('Mining deployment configuration unavailable');const network=validateDeployment(await response.json(),config);
       round=await validateRound(operation.round,{networkId:network.networkId,authorityId:network.authorityId});

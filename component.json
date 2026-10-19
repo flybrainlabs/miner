@@ -153,7 +153,8 @@
     "web/miner-rpc-settings-v4.css": "web/miner-rpc-settings-v4.css",
     "web/miner-wallet-setup-v4.mjs": "web/miner-wallet-setup-v4.mjs",
     "web/miner-wallet-setup-v4.css": "web/miner-wallet-setup-v4.css",
-    "web/factory-worker-port-v4.mjs": "web/factory-worker-port-v4.mjs"
+    "web/factory-worker-port-v4.mjs": "web/factory-worker-port-v4.mjs",
+    "web/factory-pool-controller-v4.mjs": "web/factory-pool-controller-v4.mjs"
   },
   "project": "flybrainlabs"
 }

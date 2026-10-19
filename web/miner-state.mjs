@@ -44,6 +44,7 @@ export function errorCode(error) {
   return 'operation';
 }
 export const ERROR_TEXT={
+  'input-lease-lost':'The input assignment could not be renewed. Your saved backgrounds remain; continue to check the assignment again.',
   paused:'Paused. Checked input blocks and saved results remain. An interrupted experiment must start again.',
   space:'There is not enough browser storage. Saved results and submission recovery data are retained. Free space in Settings or continue on another device.',
   'other-tab':'Another page holds the model session. Browse results here, or finish, discard or close that session before starting here.',

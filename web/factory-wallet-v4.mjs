@@ -5,4 +5,6 @@ export {FactorySubmissionV4} from './factory-submission-v4.mjs';
 export {FactoryContentStoreV4} from './factory-content-store-v4.mjs';
 export {MiningWalletV4,newMiningMnemonic} from './mining-wallet-v4.mjs';
 export {MiningWalletPolicyV4} from './mining-wallet-policy-v4.mjs';
-export {factoryWorkerReaderV4} from './factory-worker-reader-v4.mjs';
+export {MiningWalletPoolPolicyV4} from './mining-wallet-pool-policy-v4.mjs';
+export {verifyPoolManifestV4,verifyPoolCatalogV4,poolDeploymentV4,verifyPoolGoalV4,selectPoolContextV4,FactoryPoolSwitchV4} from './factory-pool-v4.mjs';
+export {factoryWorkerReaderV4,factoryWorkerPoolReaderV4} from './factory-worker-reader-v4.mjs';
