@@ -87,7 +87,7 @@ async function launchGoal(){
   if(goalView.pending.length)throw new FlowError('operation','Recover pending artifacts before continuing mining');
   await goalView.prepareMiningSession?.();
   if(runner.paused){await runner.resume({minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1048576});return;}
-  await goalView.client.sync();const eligibility=goalView.ui();if(!['open','waiting-next-goal'].includes(eligibility.state)||eligibility.action!=='start')throw new Error('Mining entry is unavailable: '+eligibility.state);
+  await goalView.client.sync();const eligibility=goalView.ui(),waitingFactory=goalView.network.execution==='contract-v4'&&eligibility.state==='contract-empty-window';if((!['open','waiting-next-goal'].includes(eligibility.state)&&!waitingFactory)||eligibility.action!=='start')throw new Error('Mining entry is unavailable: '+eligibility.state);
   invalidatePreparation('replaced');const plan=new SessionPlan({config,count:1,mode:'target-v2',minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1048576});prepPlan=plan;const generation=plan.generation;const ready=runtime.ready||await prep.start(plan);
   if(!plan.accepts(plan.operationId,generation)||document.hidden)return;
   if(!ready){plan.awaitingFiles=true;plan.remember();return;}prepPlan=null;await startGoal(plan);

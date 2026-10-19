@@ -28,7 +28,7 @@ export class GoalSearchRunner {
     if(this.running){if(this.paused)return this.resume(options);return;}
     if(!this.runtime.ready)throw new Error('Prepare the complete model first');await this.client.sync();this.client.assertMiningAuthorization?.();if(!this.client.identity)throw new Error('Persistent signing identity unavailable');if(!this.client.online)throw new Error('Authority unavailable');
     if(this.financial&&(!this.financial.account||!this.financial.login||Number(this.financial.login.expiresAt)<=Date.now()/1000))throw Object.assign(new Error('A live wallet login is required'),{code:'wallet-login-required'});
-    if(this.client.round&&this.client.serverNow>=this.client.round.pre.claimDeadline)throw new Error('New claims are closed');
+    if(this.client.round&&this.client.serverNow>=this.client.round.pre.claimDeadline&&this.client.round.pre.protocolVersion!==4)throw new Error('New claims are closed');
     if(this.financial&&this.client.round)await this.financial.requireFunding(this.client.round,this.client);
     this.budget=new GoalBudget(options);this.running=true;this.paused=false;this.intent=true;this.pauseReason=null;this.stopAfterRound=!!options.stopAfterRound;this.round=this.client.round;this.generation++;this.executions.clear();this.completed.clear();this.meter.reset();this.meter.setStatus('running');this.pool.resetExpansion();this.telemetrySequence=0;this.resumable=[];
     this.sessionWallet=this.financial?{address:this.financial.account.address,generation:this.financial.generation}:null;this.sessionIdentity=this.client.identity.publicKey;this.reconnecting=false;this.pendingRound=null;
