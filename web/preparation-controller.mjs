@@ -13,7 +13,7 @@ export async function modelLock(action){
 // Worker creation and large data loads only follow an explicit user action.
 export class ModelRuntime {
   constructor(onProgress=()=>{},workerId='compute-primary'){this.workerId=workerId;this.onProgress=onProgress;this.onCompute=()=>{};this.onTrace=()=>{};this.onLive=()=>{};this.onControl=()=>{};this.worker=null;this.pending=null;this.ready=false;this.lastProgress=0;this.generation=0;}
-  request(type,data={},expected){
+  request(type,data={},expected,transfers=[]){
     if(this.pending)return Promise.reject(new FlowError('operation','Another model operation is in progress'));
     if(['prepare','restore','build-inputs'].includes(type))this.ready=false;
     if(!this.worker){
@@ -38,7 +38,7 @@ export class ModelRuntime {
       };
       this.worker.onerror=e=>{if(generation!==this.generation)return;const p=this.pending;this.pending=null;this.ready=false;this.worker?.terminate();this.worker=null;p?.reject(new Error(e.message||'Worker failed'));};
     }
-    return new Promise((resolve,reject)=>{const operationId=data.operationId||crypto.randomUUID(),sessionId=data.sessionId||null,executionId=data.executionId||null,configKey=data.config?[data.config.campaign,data.config.graph_sha256,data.config.model_sha256,data.config.task_catalog_sha256].join('/') : null;this.pending={resolve,reject,expected,operationId,sessionId,executionId,configKey,taskId:data.task?.taskId};this.worker.postMessage({type,...data,operationId,sessionId,executionId,configKey,workerId:this.workerId,generation:this.generation});});
+    return new Promise((resolve,reject)=>{const operationId=data.operationId||crypto.randomUUID(),sessionId=data.sessionId||null,executionId=data.executionId||null,configKey=data.config?[data.config.campaign,data.config.graph_sha256,data.config.model_sha256,data.config.task_catalog_sha256].join('/') : null;this.pending={resolve,reject,expected,operationId,sessionId,executionId,configKey,taskId:data.task?.taskId};try{this.worker.postMessage({type,...data,operationId,sessionId,executionId,configKey,workerId:this.workerId,generation:this.generation},transfers);}catch(error){this.pending=null;reject(error);}});
   }
   control(action){const p=this.pending;if(p?.expected==='result')this.worker?.postMessage({type:'control',action,workerId:this.workerId,operationId:p.operationId,sessionId:p.sessionId,executionId:p.executionId,configKey:p.configKey,generation:this.generation,taskId:p.taskId});}
   observe(scope,enabled){const p=this.pending;if(p?.expected==='result'&&scope?.executionId===p.executionId)this.worker?.postMessage({type:'live-subscribe',scope,enabled});}

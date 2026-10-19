@@ -1,5 +1,6 @@
 import { ObservationFocus } from './observation-focus.mjs';
 import { modelLock } from './preparation-controller.mjs';
+import { createFactoryWorkerPortV4 } from './factory-worker-port-v4.mjs';
 import { candidateId,trialTask,canonical,hex } from './target-protocol-v2.mjs';
 import { factoryTrialTask } from './task-factory-v4-science.mjs';
 import { createInputOrder } from './input-order.mjs';
@@ -53,7 +54,7 @@ export class GoalSearchRunner {
       if(this.pendingRound){if(this.active.length)break;const next=this.pendingRound;this.pendingRound=null;await this.prepareRound(next);if(!this.intent||this.paused)break;}
       if(!this.intent||this.paused){this.settlePause();if(!this.active.length&&!this.intent&&!this.paused)this.finish();break;}
       if(!this.client.online){this.disconnected();break;}
-      try{this.client.assertMiningAuthorization?.();}catch{this.pauseNow('wallet-login-required');break;}
+      try{this.client.assertMiningAuthorization?.();}catch(error){this.pauseNow(error.code||'wallet-login-required');break;}
       if(this.client.identity?.publicKey!==this.sessionIdentity||this.sessionWallet&&(this.financial?.account?.address!==this.sessionWallet.address||this.financial?.generation!==this.sessionWallet.generation)){this.pauseNow('wallet-changed');break;}
       if(this.financial&&(!this.financial.login||Number(this.financial.login.expiresAt)<=Date.now()/1000)){this.pauseNow('wallet-login-required');break;}
       if(this.budget.limit){this.pauseNow(this.budget.limit);break;}
@@ -92,7 +93,9 @@ export class GoalSearchRunner {
       runtime.onLive=m=>{if(accept(m))this.onSnapshot(m,runtime);};
       runtime.onControl=m=>{if(!accept(m))return;e.slot.status=m.state==='paused'?'parked':'running';e.telemetry=m.telemetry||e.telemetry;if(m.telemetry)this.meter.merge(m.telemetry);if(this.focusedExecutionId===e.id)this.onObservationStage(e.observationScope,m.state==='paused'?'paused':'simulation');this.refreshClock();this.settlePause();this.publish();this.pump();};
       this.computation.append('task',{executionId:e.id,candidateId:e.meta.candidateId,roundId:e.round.roundId,trialId:e.task.trialId,k:e.meta.candidateId.slice(0,8),bodyId:e.task.bodyId,repeatIndex:e.j});this.phase='computing-background';if(this.focusedExecutionId===e.id)this.observation.select(e);this.publish();
-      const result=await runtime.request('run',{task:e.task,config:this.config,round:e.round,networkId:this.client.network.networkId,sessionId:this.budget.sessionId,operationId:e.operationId,executionId:e.id,observationScope:e.observationScope,observe:this.observation.enabled&&this.focusedExecutionId===e.id},'result');this.meter.retire(e.id,result.computation);e.slot.status='saving';e.phase='saving';if(this.focusedExecutionId===e.id)this.onObservationStage(e.observationScope,'saving');this.phase='evaluating-and-saving';e.telemetry={...result.computation,stage:'saving'};this.refreshClock();this.publish();
+      const readCapability=e.task.protocolVersion===4?createFactoryWorkerPortV4(this.client.reader,e.round.pre.taskIndex):null;let result;
+      try{result=await runtime.request('run',{task:e.task,config:this.config,round:e.round,...(readCapability?{factoryReadPort:readCapability.port}:{}),networkId:this.client.network.networkId,sessionId:this.budget.sessionId,operationId:e.operationId,executionId:e.id,observationScope:e.observationScope,observe:this.observation.enabled&&this.focusedExecutionId===e.id},'result',readCapability?[readCapability.port]:[]);}finally{readCapability?.close();}
+      this.meter.retire(e.id,result.computation);e.slot.status='saving';e.phase='saving';if(this.focusedExecutionId===e.id)this.onObservationStage(e.observationScope,'saving');this.phase='evaluating-and-saving';e.telemetry={...result.computation,stage:'saving'};this.refreshClock();this.publish();
       const bytes=result.responseBytes+(result.traceBytes?.byteLength||0)+65536;
       try{await this.store.saveTrial(e.meta,result);e.savedBytes+=bytes;this.budget.savedBytes+=bytes;this.budget.reservedBytes=Math.max(0,this.budget.reservedBytes-bytes);e.reservation=Math.max(0,e.reservation-bytes);}
       catch(error){this.pendingResults.set(e.id,result);this.budget.stagingBytes+=bytes;this.budget.reservedBytes=Math.max(0,this.budget.reservedBytes-bytes);e.reservation=Math.max(0,e.reservation-bytes);result.saveError={code:errorCode(error),name:error.name||'Error',detail:error.message};this.pauseNow(result.saveError.code==='space'?'browser-space':'save-failed');try{await rememberOutputSaveError(result,error);}catch(metadata){this.computation.append('staging-diagnostic-error',{detail:metadata.message});}try{await this.onResult(result,e.meta);}catch(display){this.computation.append('display-error',{detail:display.message});}throw Object.assign(new Error('Complete artifact retained; saving needs recovery'),{code:'save-failed'});}

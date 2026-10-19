@@ -10,7 +10,7 @@ import { checkCatalog, taskForIndex } from './catalog-task.mjs';
 import { selectSubnetwork, traceIdentity, decodeTraceRows, traceTransfers, traceSideFile } from './propagation-trace.mjs';
 import { validateRound, trialTask, evaluate as evaluateGoal } from './target-protocol-v2.mjs';
 import { factoryTrialTask } from './task-factory-v4-science.mjs';
-import { readerForDeployment,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
+import { factoryWorkerReaderV4,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
 import { factoryRecord } from './task-factory-result-v4.mjs';
 import { retainOutput, releaseOutput } from './pending-output.mjs';
 import { LiveSnapshotSender, completeWindowBoundary, epochNow } from './live-observation.mjs';
@@ -228,7 +228,7 @@ async function validateRun(config,task){
     let round;
     if(task.protocolVersion===4){
       const response=await fetch('/assets/data/task-factory-deployment-v4.json',{cache:'no-store'});if(!response.ok)throw new Error('Task factory deployment unavailable');
-      round=await verifyFactoryRound(readerForDeployment(await response.json()),operation.round);
+      const reader=factoryWorkerReaderV4(await response.json(),operation.factoryReadPort);try{round=await verifyFactoryRound(reader,operation.round);}finally{reader.dispose();}
     }else{
       const response=await fetch('/assets/data/mining-deployment-v1.json',{cache:'no-store'});if(!response.ok)throw new Error('Mining deployment configuration unavailable');const network=validateDeployment(await response.json(),config);
       round=await validateRound(operation.round,{networkId:network.networkId,authorityId:network.authorityId});
@@ -342,7 +342,7 @@ self.onmessage=async({data:message})=>{
     if(message.action==='cancel'&&runControl.stage==='simulation'){runControl.cancelled=true;runControl.wake?.();}
     return;
   }
-  if(busy){self.postMessage({...message,type:'error',message:'Worker is already busy'});return;}
+  if(busy){self.postMessage({type:'error',message:'Worker is already busy',operationId:message.operationId,sessionId:message.sessionId,executionId:message.executionId,configKey:message.configKey,workerId:message.workerId,generation:message.generation,taskId:message.task?.taskId});return;}
   busy=true;operation={...message,started:performance.now()};
   try{
     if(message.type==='prepare')await prepare(message);
