@@ -68,6 +68,7 @@ async function launch(single=false){
 }
 function dispatch(plan){if(plan.mode==='target-v2'){prepPlan=null;startGoal(plan).catch(showError);return;}if(!plan.launchIntent||plan.cancelled||document.hidden)return;prepPlan=null;const options={plan};legacyRunner.start(options).catch(showError);render();}
 async function prepareDevice(){
+  if(goalView?.sciencePanel?.running)throw new Error('Pause scientific mining before preparing another model');
   invalidatePreparation('replaced');
   const plan=new SessionPlan({config,count:1,mode:'prepare-only'});prepPlan=plan;
   const generation=plan.generation,ready=await prep.start(plan);
@@ -75,6 +76,7 @@ async function prepareDevice(){
   if(ready){prepPlan=null;render();}else{plan.awaitingFiles=true;plan.remember();render();}
 }
 async function importFiles(files){
+  if(goalView?.sciencePanel?.running)throw new Error('Pause scientific mining before replacing model files');
   const plan=prepPlan,generation=plan?.generation;await prep.importFiles(files);
   if(plan?.awaitingFiles&&plan.accepts(plan.operationId,generation)&&!document.hidden){plan.awaitingFiles=false;const ready=await prep.start(plan);if(plan.accepts(plan.operationId,generation)){if(ready){if(plan.mode==='prepare-only'){prepPlan=null;render();}else dispatch(plan);}else plan.awaitingFiles=true;}}
 }
@@ -186,7 +188,7 @@ async function setup(){
   computationView=new ComputationView(runner.computation,{t,locale:()=>window.FlyI18n.language});
   const historyContext=()=>({...context(),catalog:historyProfile?.catalog||catalog,config:historyProfile?.config||config,local:historyLocal,snapshot:historyProfile?.entry.id==='quick32'?snapshot:null});
   contributionView=new ContributionView({context:historyContext,open:r=>openRow({...r,historyProfile}).catch(showError),onSubmission:(p,r)=>reviewSubmission(p,r).catch(showError)});
-  tools=new ResearchTools({context,run:task=>{if(goalView?.runner.running||legacyRunner.running)throw new FlowError('operation','Pause and stop mining before using advanced tools');return legacyRunner.start({task,count:1,minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1024*1024,allowRecompute:true});},prepare:()=>{invalidatePreparation('manual-model');return prep.preparedFiles($('research-graph').files?.[0],$('research-model').files?.[0]);},open:openRow,connect,controller:()=>submission,refresh,onError:showError});
+  tools=new ResearchTools({context,run:task=>{if(goalView?.runner.running||goalView?.sciencePanel?.running||legacyRunner.running)throw new FlowError('operation','Pause and stop mining before using advanced tools');return legacyRunner.start({task,count:1,minutes:sessionMinutes(),storageBytes:Number($('miner-limit-storage').value)*1024*1024,allowRecompute:true});},prepare:()=>{if(goalView?.sciencePanel?.running)throw new Error('Pause scientific mining before replacing the model');invalidatePreparation('manual-model');return prep.preparedFiles($('research-graph').files?.[0],$('research-model').files?.[0]);},open:openRow,connect,controller:()=>submission,refresh,onError:showError});
   const network=deployment;
   let financial=null;if(deployment.walletMining){financial=await globalThis.flybrainlabsWalletReady;const pinned=deployment.walletMining;const matches=financial&&['schema','cluster','genesisHash','programId','mint','policyHash'].every(k=>financial.config[k]===pinned[k])&&(deployment.execution==='contract-v4'||financial.config.authorityId===network.authorityId)&&financial.config.apiBase===network.apiBase;
     if(!matches){financial={requireFunding:async()=>{throw new FlowError('services','Wallet service unavailable; saved model and artifacts remain usable');},acceptCandidate:async()=>{throw new FlowError('services','Original wallet authorization is unavailable');}};}
@@ -197,6 +199,7 @@ async function setup(){
   goalView=new GoalView({network,factory,financial,runtime,pool:legacyRunner.pool,config,state,onFocus:(scope,task)=>responseView.barrier(scope,{...task,viewWorkerNumber:[...runner.pool.slots.keys()].indexOf(scope.workerId)+1}),onSnapshot:m=>responseView.receive(m),onObservationProgress:(scope,m)=>responseView.propagation.progress(scope,m),onObservationStage:(scope,stage)=>responseView.propagation.stage(scope,stage),onResult:async(r,m)=>{latest=r;newResults++;$('miner-new-result').hidden=false;},onOpen:async b=>{navigate('contributions');await responseView.render(b);},onError:showError,onChange:render});
   runner=goalView.runner;runner.pool.onChange=()=>{const active=calculation();active.publish();if(active.running)active.pump();};computationView.log=runner.computation;
   await goalView.initialize();
+  if(factory)goalView.sciencePanel=await (await import('./scientific-mining-panel-v5.mjs')).attachScientificMining(goalView);
   $('miner-v1-results').hidden=true;runner.observation.setEnabled(responseView.propagation.controller.enabled);
   $('research-stimulus-index').value=31;await prep.check();events.context.returning=!!(local.length||runner.returning||prep.inventory.model);events.emit('enter');initialised=true;route();tools.render();contributionView.render();$('miner-events').checked=events.enabled;
   $('research-capabilities').textContent=t('Browser storage quota is disk capacity, not available RAM. Only saved blocks and results survive refresh.');$('research-connect').disabled=true;$('research-chain-state').textContent=t('This deployment uses a signed computation node.');
@@ -212,7 +215,7 @@ $('miner-primary').onclick=()=>{if(prep?.busy||actionBusy)return;if(goalView?.ui
 $('miner-files').onchange=()=>act(()=>importFiles($('miner-files').files));$('miner-drop').ondragover=e=>e.preventDefault();$('miner-drop').ondrop=e=>{e.preventDefault();if(actions().import)act(()=>importFiles(e.dataTransfer.files));};
 $('miner-prepare-pause').onclick=()=>{invalidatePreparation('paused');prep.pause();};$('miner-pause-now').onclick=()=>{invalidatePreparation('paused');runner.pauseNow();};$('miner-pause-after').onclick=()=>runner.pauseAfter();
 $('miner-stop').onclick=()=>{if(confirm(t('Discard only the unfinished task? In-memory simulation state is lost. Completed results finish saving.')))runner.stopNow();};
-$('research-restore').onclick=()=>act(async()=>{if(calculation().running||prep.busy)return;invalidatePreparation('restore-model');await prep.start();});
+$('research-restore').onclick=()=>act(async()=>{if(calculation().running||goalView?.sciencePanel?.running||prep.busy)return;invalidatePreparation('restore-model');await prep.start();});
 $('research-cancel').onclick=()=>calculation().running?calculation().stopNow():prep.pause();
 $('miner-history-profile').onchange=()=>act(()=>selectHistory($('miner-history-profile').value));
 $('research-recompute-viewed').onclick=()=>act(recomputeHistory);

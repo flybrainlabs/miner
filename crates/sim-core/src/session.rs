@@ -44,9 +44,22 @@ impl CellTrace {
     }
 }
 
+struct SparseState {
+    current: Vec<usize>,
+    next: Vec<usize>,
+    marked: Vec<bool>,
+    selection: Vec<usize>,
+    last_a: Vec<u32>,
+    last_b: Vec<u32>,
+    position: usize,
+    choose_next: bool,
+    updates: u64,
+    boundary_updates: u64,
+}
+
 /// Owns mutable task state. Borrowed frozen model remains alive until disposal.
-/// Every advance budget counts a neuron pair or one actual outgoing edge visit.
-/// A half step retains its cell/edge cursor and both delay buffers.
+/// A slice budgets cell visits, edges and sparse step boundaries. A lazy idle
+/// reconstruction is bounded by the registered task horizon.
 pub struct SimSession<'a> {
     graph: &'a Graph<'a>,
     signs: &'a [i8],
@@ -82,6 +95,9 @@ pub struct SimSession<'a> {
     trace_mask: Vec<bool>,
     trace_limit: usize,
     pub trace: Vec<CellTrace>,
+    sparse: Option<SparseState>,
+    dense_fallback: bool,
+    deferred_dense_updates: u32,
 }
 impl<'a> SimSession<'a> {
     #[allow(clippy::too_many_arguments)] // Frozen graph, physiology, task and independent observation budgets.
@@ -196,13 +212,83 @@ impl<'a> SimSession<'a> {
             trace_mask,
             trace_limit,
             trace: Vec::new(),
+            sparse: None,
+            dense_fallback: false,
+            deferred_dense_updates: 0,
         })
+    }
+    /// Exact event execution is admitted only when background-only ticks cannot
+    /// cross threshold. The complete graph and frozen response format are retained.
+    pub fn enable_sparse(&mut self) -> Result<(), SimError> {
+        let p = self.parameters;
+        let bound = p.threshold.checked_sub(1).and_then(|v| {
+            v.checked_sub(v.div_euclid(p.leak_divisor))
+                .and_then(|v| v.checked_add(p.background_current))
+        });
+        if self.progress.completed_steps != 0 || self.cell != 0 || self.sparse.is_some()
+            || p.reset >= p.threshold || !bound.is_some_and(|v| v < p.threshold)
+        {
+            return Err(SimError::ModelShape);
+        }
+        let n = self.graph.neuron_count;
+        self.sparse = Some(SparseState {
+            current: Vec::new(), next: Vec::new(), marked: vec![false; n],
+            selection: self.trace_mask.iter().enumerate().filter_map(|(i, x)| x.then_some(i)).collect(),
+            last_a: vec![0; n], last_b: vec![0; n], position: 0,
+            choose_next: true, updates: 0, boundary_updates: 0,
+        });
+        self.sparse_step();
+        Ok(())
+    }
+    pub fn exact_sparse(&self) -> bool { self.sparse.is_some() }
+    pub fn used_dense_fallback(&self) -> bool { self.dense_fallback }
+    fn sparse_step(&mut self) {
+        let Some(s) = self.sparse.as_mut() else { return; };
+        s.current.clear();
+        std::mem::swap(&mut s.current, &mut s.next);
+        for &i in &s.current { s.marked[i] = false; }
+        s.current.extend_from_slice(&s.selection);
+        let t = self.progress.completed_steps;
+        if t >= self.task.stimulus_start && t < self.task.stimulus_end {
+            s.current.push(self.task.target_index);
+        }
+        s.current.sort_unstable(); s.current.dedup();
+        s.position = 0; s.choose_next = true;
+    }
+    fn reconstruct_idle(&mut self, index: usize, until: u32, record: bool) -> Result<(), SimError> {
+        let Some(s) = self.sparse.as_mut() else { return Ok(()); };
+        for step in s.last_b[index]..until {
+            let entropy = splitmix64(self.task.public_seed ^ self.graph.body_id(index)
+                ^ u64::from(step).wrapping_mul(0xd6e8feb86659fd93));
+            let drive = if (entropy & 0xffff) < u64::from(self.parameters.background_probability_u16) {
+                self.parameters.background_current
+            } else { 0 };
+            if tick(&mut self.membrane_b[index], &mut self.refractory_b[index], drive, self.parameters)?.spike {
+                return Err(SimError::ModelShape);
+            }
+            s.updates += 1;
+        }
+        if record {
+            for step in s.last_a[index]..until {
+                let entropy = splitmix64(self.task.public_seed ^ self.graph.body_id(index)
+                    ^ u64::from(step).wrapping_mul(0xd6e8feb86659fd93));
+                let drive = if (entropy & 0xffff) < u64::from(self.parameters.background_probability_u16) {
+                    self.parameters.background_current
+                } else { 0 };
+                if tick(&mut self.membrane_a[index], &mut self.refractory_a[index], drive, self.parameters)?.spike {
+                    return Err(SimError::ModelShape);
+                }
+                s.updates += 1;
+            }
+        }
+        Ok(())
     }
     pub fn progress(&self) -> SimProgress {
         self.progress
     }
     pub fn partial_neuron_updates(&self) -> u32 {
-        (2 * self.cell) as u32
+        self.sparse.as_ref().map_or((2 * self.cell) as u32 + self.deferred_dense_updates,
+            |s| (s.updates - s.boundary_updates).min(u64::from(u32::MAX)) as u32)
     }
     /// Actual additions, including the current incomplete simulation step.
     /// Observation only; the response and scientific identity are unchanged.
@@ -257,24 +343,53 @@ impl<'a> SimSession<'a> {
                         .checked_add(current)
                         .ok_or(SimError::NumericRange)?;
                     self.transmissions = self.transmissions.saturating_add(1);
+                    if let Some(s) = self.sparse.as_mut() {
+                        if !s.marked[target] { s.marked[target] = true; s.next.push(target); }
+                    }
                 }
                 self.edge += 1;
                 work += 1;
                 continue;
             }
+            if let Some(s) = self.sparse.as_mut() {
+                if s.choose_next {
+                    self.cell = s.current.get(s.position).copied().unwrap_or(n);
+                    s.choose_next = false;
+                }
+            }
             if self.cell == n {
                 std::mem::swap(&mut self.incoming_a, &mut self.next_a);
                 std::mem::swap(&mut self.incoming_b, &mut self.next_b);
-                self.next_a.fill(0);
-                self.next_b.fill(0);
+                if let Some(s) = self.sparse.as_ref() {
+                    for &i in &s.current { self.next_a[i] = 0; self.next_b[i] = 0; }
+                } else {
+                    self.next_a.fill(0); self.next_b.fill(0);
+                }
                 self.cell = 0;
                 self.progress.completed_steps += 1;
-                self.progress.neuron_updates =
-                    2 * n as u64 * u64::from(self.progress.completed_steps);
+                self.progress.neuron_updates = self.sparse.as_ref().map_or(
+                    2 * n as u64 * u64::from(self.progress.completed_steps), |s| s.updates);
+                self.deferred_dense_updates = 0;
                 self.progress.synapse_transmissions = self.transmissions;
                 self.progress.observed_spikes_a = self.global.spikes_a;
                 self.progress.observed_spikes_b = self.global.spikes_b;
                 observer(self.progress);
+                if let Some(s) = self.sparse.as_mut() { s.boundary_updates = s.updates; }
+                self.sparse_step();
+                // Once the frontier is dense, restore every dormant state in
+                // canonical model time and continue the unchanged dense loop.
+                // Reconstructed ticks are counted when actually executed.
+                if !self.done() && self.sparse.as_ref().is_some_and(|s| s.current.len() > n / 4) {
+                    for i in 0..n { self.reconstruct_idle(i, self.progress.completed_steps, true)?; }
+                    let updates = self.sparse.as_ref().unwrap().updates - self.progress.neuron_updates;
+                    self.deferred_dense_updates = u32::try_from(updates).map_err(|_|SimError::ResourceLimit)?;
+                    work = work.saturating_add(self.deferred_dense_updates as usize);
+                    self.sparse = None;
+                    self.dense_fallback = true;
+                    self.cell = 0;
+                }
+                // Empty event frontiers still advance a bounded amount of model time.
+                if self.sparse.is_some() { work += 1; }
                 continue;
             }
             let index = self.cell;
@@ -288,6 +403,7 @@ impl<'a> SimSession<'a> {
                 0
             };
             let record = self.trace_mask[index];
+            self.reconstruct_idle(index, step, record)?;
             let before_a = self.membrane_a[index];
             let before_b = self.membrane_b[index];
             let ref_a = self.refractory_a[index];
@@ -318,12 +434,14 @@ impl<'a> SimSession<'a> {
                 .checked_add(background)
                 .and_then(|value| value.checked_add(stimulation))
                 .ok_or(SimError::NumericRange)?;
-            let tick_a = tick(
+            let tick_a = if self.sparse.is_some() && !record {
+                TickOutcome { spike: false, leaked: 0, integrated: 0 }
+            } else { tick(
                 &mut self.membrane_a[index],
                 &mut self.refractory_a[index],
                 drive_a,
                 self.parameters,
-            )?;
+            )? };
             let tick_b = tick(
                 &mut self.membrane_b[index],
                 &mut self.refractory_b[index],
@@ -332,6 +450,13 @@ impl<'a> SimSession<'a> {
             )?;
             let a = tick_a.spike;
             let b = tick_b.spike;
+            if let Some(s) = self.sparse.as_mut() {
+                if a { return Err(SimError::ModelShape); }
+                s.updates += 1 + u64::from(record);
+                s.last_b[index] = step + 1;
+                if record { s.last_a[index] = step + 1; }
+                s.position += 1; s.choose_next = true;
+            }
             if observed_step {
                 if a {
                     self.global.spikes_a += 1;

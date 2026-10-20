@@ -10,7 +10,7 @@ import { checkCatalog, taskForIndex } from './catalog-task.mjs';
 import { selectSubnetwork, traceIdentity, decodeTraceRows, traceTransfers, traceSideFile } from './propagation-trace.mjs';
 import { validateRound, trialTask, evaluate as evaluateGoal } from './target-protocol-v2.mjs';
 import { factoryTrialTask } from './task-factory-v4-science.mjs';
-import { factoryWorkerPoolReaderV4,verifyFactoryRound } from '/assets/vendor/generated/factory-wallet-v4.mjs';
+import { factoryWorkerPoolReaderV4,verifyFactoryRound,verifyScientificWorkerRound,scientificTrialTask } from '/assets/vendor/generated/factory-wallet-v4.mjs';
 import { factoryRecord } from './task-factory-result-v4.mjs';
 import { retainOutput, releaseOutput } from './pending-output.mjs';
 import { LiveSnapshotSender, completeWindowBoundary, epochNow } from './live-observation.mjs';
@@ -224,11 +224,14 @@ async function identifyFiles(message){
 
 async function validateRun(config,task){
   if(loadedIdentity?.graph!==config.graph_sha256||loadedIdentity?.model!==config.model_sha256||config.time_step_us!==1000||(config.observe_start||0)!==0||(config.parameter_version||'lif-point-v0-dev')!=='lif-point-v0-dev')throw new Error('Unknown frozen scientific configuration');
-  if(task.protocolVersion===2||task.protocolVersion===4){
+  if(task.protocolVersion===2||task.protocolVersion===4||task.protocolVersion===5){
     let round;
     if(task.protocolVersion===4){
       const response=await fetch('/assets/data/task-factory-deployment-v4.json',{cache:'no-store'});if(!response.ok)throw new Error('Task factory deployment unavailable');
       const reader=await factoryWorkerPoolReaderV4(await response.json(),operation.round,operation.factoryReadPort);try{round=await verifyFactoryRound(reader,operation.round);}finally{reader.dispose();}
+    }else if(task.protocolVersion===5){
+      const response=await fetch('/assets/data/scientific-deployment-v5.json',{cache:'no-store'});if(!response.ok)throw new Error('Scientific deployment unavailable');
+      round=await verifyScientificWorkerRound(await response.json(),operation.round,operation.factoryReadPort);
     }else{
       const response=await fetch('/assets/data/mining-deployment-v1.json',{cache:'no-store'});if(!response.ok)throw new Error('Mining deployment configuration unavailable');const network=validateDeployment(await response.json(),config);
       round=await validateRound(operation.round,{networkId:network.networkId,authorityId:network.authorityId});
@@ -236,7 +239,7 @@ async function validateRun(config,task){
     const g=round.goal;
     if(config.steps!==g.steps||config.neuron_count!==g.neuronCount||config.graph_sha256!==g.graphRoot||config.model_root_sha256!==g.modelRoot||config.model_sha256!==g.modelDataRoot||config.registry_sha256!==g.registryRoot)throw new Error('V2 science differs from the loaded complete model');
     const view=new DataView(instance.exports.memory.buffer,graph.pointer,graph.length);for(const set of [g.stimulusSet,g.responseSet,g.offTargetSet])for(const m of set)if(view.getBigUint64(52+m.modelIndex*8,true)!==BigInt(m.bodyId))throw new Error('V2 set membership differs from full registry');
-    const expected=await (task.protocolVersion===4?factoryTrialTask:trialTask)(round,task.input,task.repeatIndex);for(const k of ['taskId','trialId','roundId','goalId','candidateId','bodyId','targetIndex','repeatIndex','seed'])if(task[k]!==expected[k])throw new Error('Scientific trial identity mismatch: '+k);
+    const expected=task.protocolVersion===5?await scientificTrialTask(round.scienceRound,round.roundAddress,round.content,task.input,task.role,task.assignment,task.repeatIndex,{training:task.training===true}):await (task.protocolVersion===4?factoryTrialTask:trialTask)(round,task.input,task.repeatIndex);for(const k of ['taskId','trialId','roundId','goalId','candidateId','bodyId','targetIndex','repeatIndex','seed'])if(task[k]!==expected[k])throw new Error('Scientific trial identity mismatch: '+k);
     if(JSON.stringify(task.stimulus)!==JSON.stringify(expected.stimulus))throw new Error('V2 stimulus mismatch');return;
   }
   let saved=catalogs.get(config.task_catalog_sha256);
@@ -250,7 +253,8 @@ async function run(message) {
   if(!handle||!graph||!model)throw new Error('Verified full graph and model files are required');
   const {config,task}=message;runControl={paused:false,cancelled:false,stage:'simulation',wake:null,taskId:task.taskId};await validateRun(config,task);
   const core=instance.exports,started=performance.now();
-  computation=new ComputationMeter(task,config,()=>performance.now(),{networkId:message.networkId||'local-tools',sessionId:message.sessionId||'',roundId:task.roundId||'',workerId:message.workerId,executionId:message.executionId,operationId:message.operationId});lastCompute=0;lastCompleteStepEpochMs=null;progressInFlight=null;progressLatest=null;progressSequence=0;computeProgress(computation.snapshot('validating'));
+  const exactEvents=typeof core.flypow_session_use_exact_events==='function';
+  computation=new ComputationMeter(task,config,()=>performance.now(),{executionMethod:exactEvents?'exact-events-v1':'dense-v1',networkId:message.networkId||'local-tools',sessionId:message.sessionId||'',roundId:task.roundId||'',workerId:message.workerId,executionId:message.executionId,operationId:message.operationId});lastCompute=0;lastCompleteStepEpochMs=null;progressInFlight=null;progressLatest=null;progressSequence=0;computeProgress(computation.snapshot('validating'));
   const graphView=()=>new DataView(core.memory.buffer,graph.pointer,graph.length),modelView=()=>new DataView(core.memory.buffer,model.pointer,model.length);
   const subnet=selectSubnetwork(graphView(),modelView(),config.neuron_count,task.targetIndex,message.traceBudget||{});
   const trace=traceIdentity(config,task,message.executionId||message.operationId,subnet);
@@ -262,6 +266,7 @@ async function run(message) {
     session=core.flypow_session_begin(handle,BigInt(task.bodyId),config.steps,config.observe_start||0,1,task.stimulus.start_step,task.stimulus.end_step,BigInt(task.stimulus.current),task.seed,config.max_archive_bytes||128*1024*1024,selection,subnet.selection.length);
     core.flypow_free(selection,subnet.selection.length*4);selection=0;
     if(!session)throw new Error('Full-network WASM session rejected its frozen inputs');
+    if(exactEvents&&core.flypow_session_use_exact_events(session)!==1)throw new Error('Exact event execution is not admitted for this model');
     tracePointer=core.flypow_alloc(traceRows*72);if(!tracePointer)throw new Error('Trace buffer allocation failed');
     const liveBytes=9*subnet.selection.length*2*72;livePointer=core.flypow_alloc(liveBytes);if(!livePointer)throw new Error('Live buffer allocation failed');
     liveSender=new LiveSnapshotSender({read:()=>{
@@ -316,7 +321,7 @@ async function run(message) {
     const transfers=[bundle.previewBytes.buffer,bundle.manifestBytes.buffer,side.bytes.buffer,side.manifestBytes.buffer];if(archive instanceof ArrayBuffer)transfers.push(archive);
     const result={type:'result',bodyId:task.bodyId,task,config,record:bundle.record,preview:bundle.preview,previewBytes:bundle.previewBytes.buffer,manifestBytes:bundle.manifestBytes.buffer,previewRoot:bundle.previewRoot,archiveRoot:bundle.archiveRoot,
       archive,responseBytes:length,temporary,trace,traceBytes:side.bytes.buffer,traceManifestBytes:side.manifestBytes.buffer,resultHash,elapsedMs:Math.round(performance.now()-started),computation:computation.snapshot('results'),memoryReport:{wasmCapacityBytes:core.memory.buffer.byteLength,scope:'linear memory capacity, not peak process RSS'}};
-    if(task.protocolVersion===2||task.protocolVersion===4)result.goalMetrics=await evaluateGoal(operation.round.goal,task.input,archive);
+    if(task.protocolVersion===2||task.protocolVersion===4||task.protocolVersion===5)result.goalMetrics=await evaluateGoal(task.protocolVersion===5?operation.round.content.goal:operation.round.goal,task.input,archive,{completeOffTarget:task.protocolVersion===5});
     try{await retainOutput(result,operation);}catch(error){result.stagingMetadataError=error.message;}
     post(result,transfers);
   } catch(error) {

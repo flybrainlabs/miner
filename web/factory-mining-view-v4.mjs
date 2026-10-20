@@ -12,6 +12,7 @@ const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
 Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model'],'contract-task-expired':['本轮已超时 · 可按合约规则接续','Task expired · contract recovery available'],'contract-result-ready':['已有通过验证的候选 · 可完成结算','Verified candidate ready · finalize the result'],'contract-task-ready':['下一项预设任务待开启','Next predefined task ready to open'],'recover-contract-task':['接续合约任务','Continue contract task'],'finalize-contract-result':['完成候选结算','Finalize verified result'],'contract-empty-window':['新承诺已截止 · 本轮暂无候选','Claims closed · no candidates this attempt']});
 Object.assign(texts,{'wait-and-continue':['等待并自动继续挖矿','Wait and continue mining'],'contract-auto-wait':['自动接续已开启 · 等待合约窗口','Automatic continuation active · waiting for contract window']});
+Object.assign(texts,{'science-mining-active':['科学挖矿正在运行','Scientific mining is running']});
 export class FactoryMiningViewV4 extends GoalMiningView {
   constructor({factory,financial,...options}){
     if(!financial?.availableWallets)throw new Error('The shared wallet connection is unavailable');
@@ -64,6 +65,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     }finally{this.refreshing=false;}
   }
   ui(){
+    if(this.sciencePanel?.running)return {state:'science-mining-active',button:'science-mining-active',disabled:true,action:'none',pendingOutputs:0};
     const p=this.state.value.preparation,f=this.snapshot?.factory,walletSignedIn=!!this.adapter?.isSignedIn();
     const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
     if(this.walletSetup&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused)&&(this.walletSetup.requiresUnlock||this.adapter.rpc.ready&&(!this.walletSetup.ready||this.runtime.ready&&!this.walletSetup.canMine)))return {state:'mining-wallet-required',button:'configure-mining-wallet',disabled:this.walletSetup.busy||!!this.actionBusy,action:'configure-mining-wallet',pendingOutputs:0};
@@ -81,6 +83,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
   }
   async prepareMiningSession(){await this.walletSetup.ensureSession();this.client.assertMiningAuthorization();await this.taskPool?.tick({explicit:true});await this.client.sync();if(this.snapshot?.recovery)await this.recoverContractTask();}
   render(){
+    this.sciencePanel?.render();
     if(!this.runner)return;showMiningStage(document,miningWorkflow(this.state.value.preparation,{ready:this.runtime.ready,running:this.runner.running,pendingOutputs:this.pending.length}));super.render();this.rpcSettings?.render();this.walletSetup?.render();const f=this.snapshot?.factory,t=this.snapshot?.task,r=this.snapshot?.round;this.financial.factorySnapshot=this.snapshot;$('miner-preparation').hidden=this.state.value.preparation.phase==='unsupported';
     if(this.ui().action==='configure-mining-wallet'){
       for(const step of MINING_STEPS){const tab=$('miner-step-'+step);tab.hidden=true;tab.disabled=true;tab.tabIndex=-1;tab.setAttribute('aria-selected','false');tab.setAttribute('aria-current','false');$('miner-stage-'+step).hidden=true;}

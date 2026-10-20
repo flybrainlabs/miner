@@ -9,10 +9,12 @@ export class ComputationMeter {
     this.pausedMs=0;this.pausedAt=null;
     this.identity={taskId:task.taskId,k:task.k,bodyId:String(task.bodyId),totalSteps:config.steps,neuronCount:config.neuron_count,directedConnections:config.directed_connection_count,timeStepUs:config.time_step_us};
     this.counters={completedSteps:0,neuronUpdates:0,synapseTransmissions:0,observedSpikesA:0,observedSpikesB:0};this.scope=scope;this.sequence=0;this.partialNeuronUpdates=0;this.workSynapseAdditions=0;
+    this.exactEvents=scope.executionMethod==='exact-events-v1';
   }
   step(completedSteps,totalSteps,neuronUpdates,synapseTransmissions,observedSpikesA,observedSpikesB) {
     const now=this.clock(),numbers=[completedSteps,totalSteps,neuronUpdates,synapseTransmissions,observedSpikesA,observedSpikesB].map(Number);
-    if(numbers.some(n=>!Number.isSafeInteger(n)||n<0)||totalSteps!==this.identity.totalSteps||completedSteps>totalSteps||numbers[2]!==2*this.identity.neuronCount*completedSteps||completedSteps<this.counters.completedSteps||numbers[3]<this.counters.synapseTransmissions)throw new Error('Invalid simulation work counters');
+    const covered=2*this.identity.neuronCount*completedSteps;
+    if(numbers.some(n=>!Number.isSafeInteger(n)||n<0)||totalSteps!==this.identity.totalSteps||completedSteps>totalSteps||(this.exactEvents?numbers[2]>covered:numbers[2]!==covered)||numbers[2]<this.counters.neuronUpdates||completedSteps<this.counters.completedSteps||numbers[3]<this.counters.synapseTransmissions)throw new Error('Invalid simulation work counters');
     if(this.simulationStarted===null){if(completedSteps!==0)throw new Error('Missing simulation start');this.simulationStarted=now;}
     const prior=this.previous;
     this.counters={completedSteps,totalSteps,neuronUpdates:numbers[2],synapseTransmissions:numbers[3],observedSpikesA:numbers[4],observedSpikesB:numbers[5]};this.partialNeuronUpdates=0;this.workSynapseAdditions=numbers[3];
@@ -20,13 +22,13 @@ export class ComputationMeter {
     this.previous={at:now,...this.counters};this.simulationMs=now-this.simulationStarted;
     return this.snapshot('simulation',now);
   }
-  partial(neurons,synapses){const n=Number(neurons),s=Number(synapses);if(!Number.isSafeInteger(n)||n<0||n>2*this.identity.neuronCount||!Number.isSafeInteger(s)||s<this.counters.synapseTransmissions)throw new Error('Invalid partial work');this.partialNeuronUpdates=n;this.workSynapseAdditions=s;}
+  partial(neurons,synapses){const n=Number(neurons),s=Number(synapses),limit=this.exactEvents?2*this.identity.neuronCount*Math.min(this.counters.completedSteps+1,this.identity.totalSteps)-this.counters.neuronUpdates:2*this.identity.neuronCount;if(!Number.isSafeInteger(n)||n<0||n>limit||!Number.isSafeInteger(s)||s<this.counters.synapseTransmissions)throw new Error('Invalid partial work');this.partialNeuronUpdates=n;this.workSynapseAdditions=s;}
   pause(){if(this.pausedAt===null)this.pausedAt=this.clock();}
   resume(){if(this.pausedAt!==null){const ms=this.clock()-this.pausedAt;this.pausedMs+=ms;if(this.simulationStarted!==null)this.simulationStarted+=ms;if(this.previous)this.previous.at+=ms;this.pausedAt=null;}}
   snapshot(stage,now=this.clock()) {
     const c=this.counters,ms=this.simulationMs??0;
     const pausedMs=this.pausedMs+(this.pausedAt===null?0:now-this.pausedAt);
-    return {schema:'flypow-computation-v3',type:'compute-progress',...this.identity,...c,...this.scope,sequence:++this.sequence,producedAt:Math.round(performance.timeOrigin+now),partialNeuronUpdates:this.partialNeuronUpdates,workNeuronUpdates:String(c.neuronUpdates+this.partialNeuronUpdates),workSynapseAdditions:String(this.workSynapseAdditions),stage,elapsedMs:now-this.started,activeElapsedMs:now-this.started-pausedMs,pausedMs,simulationMs:ms,modelTimeMs:c.completedSteps*this.identity.timeStepUs/1000,
+    return {schema:'flypow-computation-v3',type:'compute-progress',...this.identity,...c,...this.scope,logicalNeuronTicksCovered:String(2*this.identity.neuronCount*c.completedSteps),sequence:++this.sequence,producedAt:Math.round(performance.timeOrigin+now),partialNeuronUpdates:this.partialNeuronUpdates,workNeuronUpdates:String(c.neuronUpdates+this.partialNeuronUpdates),workSynapseAdditions:String(this.workSynapseAdditions),stage,elapsedMs:now-this.started,activeElapsedMs:now-this.started-pausedMs,pausedMs,simulationMs:ms,modelTimeMs:c.completedSteps*this.identity.timeStepUs/1000,
       averageNeuronUpdatesPerSecond:measured(c.neuronUpdates,ms),averageSynapseTransmissionsPerSecond:measured(c.synapseTransmissions,ms),
       recentNeuronUpdatesPerSecond:stage==='simulation'?this.recent?.recentNeuronUpdatesPerSecond??null:null,recentSynapseTransmissionsPerSecond:stage==='simulation'?this.recent?.recentSynapseTransmissionsPerSecond??null:null,
       remainingSimulationMs:stage==='simulation'&&c.completedSteps>0&&c.completedSteps<c.totalSteps?ms/c.completedSteps*(c.totalSteps-c.completedSteps):null};

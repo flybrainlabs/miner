@@ -12,8 +12,9 @@ const selected=load(new Uint8Array(new Uint32Array([0,1,2]).buffer)),out=e.flypo
 const begin=(options={})=>e.flypow_session_begin(handle,1n,32,options.observe||0,options.version||1,options.start||0,options.end||1,200n,1n,options.cap||134217728,options.trace===false?0:selected,options.trace===false?0:3);
 assert.equal(begin({version:2}),0);assert.equal(begin({observe:1}),0);
 let first;
-for(const budget of [1,11,65536]){
+for(const exact of [false,true])for(const budget of [1,11,65536]){
   samples=[];const session=begin({trace:budget!==11});assert(session);assert.equal(e.flypow_model_close(handle),0);assert.equal(e.flypow_session_output_length(session),0);
+  if(exact)assert.equal(e.flypow_session_use_exact_events(session),1);
   assert([1,2].includes(e.flypow_session_advance(session,budget)));if(budget===1)assert.equal(samples.at(-1)[0],0);
   // Detached JS views after memory.grow are never reused by the ABI or reader.
   const old=new Uint8Array(e.memory.buffer,gp,124);e.memory.grow(1);assert.equal(old.byteLength,0);

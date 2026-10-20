@@ -984,4 +984,105 @@ mod tests {
             SimError::ResourceLimit
         );
     }
+
+    #[test]
+    fn exact_events_match_dense_archives_and_traces_across_signed_networks() {
+        // Deterministic cyclic graphs exercise cancellation, negative potentials,
+        // delayed revisits, clipping, refractory ticks and dense propagation.
+        for seed in 0..48_u64 {
+            let n = 7;
+            let mut edges = Vec::new();
+            let mut offsets = vec![0_u64];
+            for source in 0..n {
+                for target in 0..n {
+                    let r = splitmix64(seed ^ (source * n + target) as u64);
+                    if r % 3 != 0 {
+                        edges.push((target as u32, [1, 40, 100, 999][(r % 4) as usize]));
+                    }
+                }
+                offsets.push(edges.len() as u64);
+            }
+            let mut bytes = MAGIC.to_vec();
+            bytes.extend_from_slice(&(n as u32).to_le_bytes());
+            bytes.extend_from_slice(&(edges.len() as u64).to_le_bytes());
+            bytes.extend_from_slice(&[9; 32]);
+            for i in 0..n { bytes.extend_from_slice(&(i as u64 + 1).to_le_bytes()); }
+            for o in offsets { bytes.extend_from_slice(&o.to_le_bytes()); }
+            for (target, weight) in edges {
+                bytes.extend_from_slice(&target.to_le_bytes());
+                bytes.extend_from_slice(&u32::to_le_bytes(weight));
+            }
+            let graph = Graph::parse(&bytes).unwrap();
+            let signs: Vec<_> = (0..n).map(|i| if (seed + i as u64) % 3 == 0 { -1 } else { 1 }).collect();
+            let vnc: Vec<_> = (0..n).map(|i| i % 2 == 0).collect();
+            let rois: Vec<_> = (0..n).map(|i| 1 << (i % 3)).collect();
+            let p = Parameters { background_probability_u16: if seed % 2 == 0 { u16::MAX } else { 256 },
+                membrane_limit: 200, refractory_steps: (seed % 4) as u8, reset: if seed % 5 == 0 { -150 } else { 0 },
+                ..Parameters::development_v0() };
+            let t = Task { target_index: (seed as usize) % n, steps: 64,
+                stimulus_start: (seed % 8) as u32, stimulus_end: 16,
+                observe_start: (seed % 3) as u32, stimulus_current: [0, 90, 100, 900][seed as usize % 4],
+                public_seed: seed, ..task(100) };
+            for selection in [&[][..], &[0, 3, 6][..]] {
+                let mut dense = SimSession::new(&graph, &signs, &vnc, &rois, p, t, 1 << 20, selection, 1024).unwrap();
+                let mut fast = SimSession::new(&graph, &signs, &vnc, &rois, p, t, 1 << 20, selection, 1024).unwrap();
+                fast.enable_sparse().unwrap();
+                while !dense.advance(17, |_| {}).unwrap() {}
+                let mut boundaries = 0;
+                while !fast.advance((seed as usize % 19) + 1, |_| boundaries += 1).unwrap() {}
+                assert_eq!(boundaries, 64);
+                assert_eq!(fast.trace, dense.trace, "seed {seed}");
+                assert_eq!(fast.work_synapse_additions(), dense.work_synapse_additions());
+                assert!(fast.progress().neuron_updates <= dense.progress().neuron_updates);
+                let encode = |s: SimSession<'_>| encode_response(&s.finalize().unwrap(), n as u32, t.observe_start, t.steps).unwrap();
+                assert_eq!(encode(fast), encode(dense), "seed {seed}");
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_admission_limits_and_empty_frontiers_are_explicit() {
+        let bytes = tiny_graph();
+        let graph = Graph::parse(&bytes).unwrap();
+        let make = |p, t, cap| SimSession::new(&graph, &[1; 3], &[false; 3], &[0; 3], p, t, cap, &[], 0).unwrap();
+        let p = Parameters::development_v0();
+        let mut unsafe_session = make(Parameters { background_current: 20, ..p }, task(100), 4096);
+        assert_eq!(unsafe_session.enable_sparse(), Err(SimError::ModelShape));
+        let mut midway = make(p, task(100), 4096);
+        midway.advance(1, |_| {}).unwrap();
+        assert_eq!(midway.enable_sparse(), Err(SimError::ModelShape));
+        let mut empty = make(p, task(0), 4096);
+        empty.enable_sparse().unwrap();
+        empty.advance(1, |_| {}).unwrap();
+        assert!(!empty.done());
+        while !empty.advance(1, |_| {}).unwrap() {}
+        assert_eq!(empty.progress().neuron_updates, 1);
+        let mut capped = make(p, task(100), 480);
+        capped.enable_sparse().unwrap();
+        assert_eq!(capped.advance(65536, |_| {}), Err(SimError::ResourceLimit));
+    }
+
+    #[test]
+    fn sparse_long_gaps_and_inhibitory_revisits_remain_exact_without_fallback() {
+        let n=64_u32;
+        let mut bytes=MAGIC.to_vec();bytes.extend_from_slice(&n.to_le_bytes());bytes.extend_from_slice(&5_u64.to_le_bytes());bytes.extend_from_slice(&[9;32]);
+        for i in 0..n {bytes.extend_from_slice(&(u64::from(i)+1).to_le_bytes());}
+        for i in 0..=n {bytes.extend_from_slice(&(match i {0=>0_u64,1=>2,2=>3,3=>4,_=>5}).to_le_bytes());}
+        for (target,weight) in [(1_u32,100_u32),(2,90),(3,100),(3,100),(4,100)] {bytes.extend_from_slice(&target.to_le_bytes());bytes.extend_from_slice(&weight.to_le_bytes());}
+        let graph=Graph::parse(&bytes).unwrap();let mut signs=vec![1;64];signs[2]=-1;
+        let rois=vec![1;64];let vnc=vec![false;64];
+        for seed in 0..16_u64 {for probability in [256,32768,u16::MAX] {
+            let p=Parameters{background_probability_u16:probability,membrane_limit:120,..Parameters::development_v0()};
+            let t=Task{steps:256,stimulus_start:32,stimulus_end:160,public_seed:seed,..task(150)};
+            let mut dense=SimSession::new(&graph,&signs,&vnc,&rois,p,t,1<<20,&[3,4,63],1536).unwrap();
+            let mut fast=SimSession::new(&graph,&signs,&vnc,&rois,p,t,1<<20,&[3,4,63],1536).unwrap();fast.enable_sparse().unwrap();
+            while !dense.advance(31,|_|{}).unwrap() {}
+            while !fast.advance(3,|_|{}).unwrap() {}
+            assert!(fast.exact_sparse());assert!(!fast.used_dense_fallback());
+            assert_eq!(fast.trace,dense.trace,"seed {seed}, probability {probability}");
+            assert!(fast.progress().neuron_updates<dense.progress().neuron_updates);
+            let encode=|s:SimSession<'_>|encode_response(&s.finalize().unwrap(),n,0,256).unwrap();
+            assert_eq!(encode(fast),encode(dense));
+        }}
+    }
 }

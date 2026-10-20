@@ -147,6 +147,14 @@ pub unsafe extern "C" fn flypow_session_begin(
 }
 #[unsafe(no_mangle)]
 /// # Safety
+/// session is live and unadvanced. Returns 1 only after invariant admission;
+/// failure keeps the dense session intact. Archive identities are unchanged.
+pub unsafe extern "C" fn flypow_session_use_exact_events(session: *mut AbiSession) -> u32 {
+    if session.is_null() { return 0; }
+    unsafe { (*session).simulation.as_mut().is_some_and(|s| s.enable_sparse().is_ok()) as u32 }
+}
+#[unsafe(no_mangle)]
+/// # Safety
 /// session is live. 0=failure, 1=incomplete, 2=complete. No work follows failure.
 pub unsafe extern "C" fn flypow_session_advance(session: *mut AbiSession, budget: u32) -> u32 {
     if session.is_null() {

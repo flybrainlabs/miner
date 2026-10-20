@@ -97,3 +97,12 @@ attestations and advances tasks without a privileged relayer or minimum successf
 task interval. Existing V3 records and grants are retained. Public activation is
 pending an approved calibrated catalog and finite funding. See
 [the lifecycle specification](https://github.com/flybrainlabs/docs/blob/feat/contract-task-factory-v4-20261015/docs/CONTRACT_TASK_FACTORY_V4.md).
+
+## Scientific mining V5
+
+The exact event executor retains canonical complete-model archives and falls back
+to dense execution when propagation becomes dense. `node tests/session_abi.mjs`
+checks both execution paths in actual WASM. The opt-in scientific panel requires
+a registered V5 deployment, a personal RPC and a separately approved scoped
+mining-wallet policy. Existing model caches and V4 entitlements are retained.
+See the [V5 specification](https://github.com/flybrainlabs/docs/blob/feat/scientific-mining-20261020/docs/SCIENTIFIC_MINING_V5.md).
