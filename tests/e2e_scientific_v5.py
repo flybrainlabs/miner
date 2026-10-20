@@ -81,7 +81,7 @@ def main(args):
         assert driver.execute_script('return document.querySelector("#scientific-mining-v5 button").disabled')
         assert not driver.execute_script('return performance.getEntriesByType("resource").some(r=>/\.wasm(?:\?|$)|\.feather/.test(r.name))')
         report['checks'].append('The staged website loads the V5 waiting state without starting a model download, computation or payment')
-        for index,case in enumerate(cases):
+        for index,case in enumerate([] if args.ui_only else cases):
             started=time.monotonic()
             value=driver.execute_async_script("""
 const index=arguments[0],done=arguments[arguments.length-1];
@@ -125,8 +125,25 @@ const index=arguments[0],done=arguments[arguments.length-1];
             assert value['computation']['completedSteps']==256
             assert value['retained']
             report['cases'].append({'neurons':case['config']['neuron_count'],'elapsedSeconds':round(time.monotonic()-started,3),**value})
-        report['checks'].append('The actual Worker verifies its bound SBF round through the scoped read port and produces exactly the native archive and complete non-target metrics')
-        report['checks'].append('Actual OPFS output and a structured Blob archive remain readable through a fresh IndexedDB journal object')
+        if not args.ui_only:
+            report['checks'].append('The actual Worker verifies its bound SBF round through the scoped read port and produces exactly the native archive and complete non-target metrics')
+            report['checks'].append('Actual OPFS output and a structured Blob archive remain readable through a fresh IndexedDB journal object')
+        component=driver.execute_async_script("""
+const done=arguments[arguments.length-1];
+(async()=>{const {ScientificMiningPanelV5}=await import('/assets/scientific-mining-panel-v5.mjs');document.getElementById('scientific-mining-v5')?.remove();const panel=new ScientificMiningPanelV5({runtime:{ready:false},walletSetup:{canMine:false},runner:{running:false}},{enabled:false});panel.root.id='science-acceptance-panel';document.querySelector('.research-app').append(panel.root);window.scienceAcceptancePanel=panel;done(true);})().catch(e=>done({error:e.message}));
+""")
+        assert component is True,component
+        for language in ['en','zh']:
+            for case in cases:
+                actual=driver.execute_script("""
+document.documentElement.lang=arguments[0];const metrics=arguments[1],p=window.scienceAcceptancePanel;p.render();p.showModelResult({training:false},metrics);return {cells:p.modelReport.querySelectorAll('td').length,text:p.modelReport.textContent};
+""",language,case['expected']['metrics'])
+                assert actual['cells']==5,actual
+                assert str(case['expected']['metrics']['stimulusCost']) in actual['text'],actual
+                for width in [320,390,1280]:
+                    driver.set_window_size(width,1000)
+                    assert driver.execute_script('return document.documentElement.scrollWidth<=innerWidth+1'),(language,width)
+        report['checks'].append('Positive and negative paired metrics, cost and scientific qualification are visible in the bilingual evidence table without mobile overflow')
         report['passed']=True
         driver.save_screenshot(str(output.with_suffix('.png')))
     finally:
@@ -146,4 +163,5 @@ if __name__=='__main__':
     parser.add_argument('--fixture',type=Path,action='append',required=True)
     parser.add_argument('--report',type=Path,required=True)
     parser.add_argument('--profile',type=Path,required=True)
+    parser.add_argument('--ui-only',action='store_true')
     main(parser.parse_args())
