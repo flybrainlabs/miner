@@ -273,3 +273,8 @@ strong.mining-log-line{font-weight:800;color:#ffffffa8;text-shadow:0 0 12px #fff
 @media(prefers-reduced-motion:reduce){.mining-log-track,.button.is-loading .mining-button-spinner,.mining-progress-fill{animation:none!important;transition:none!important;will-change:auto}.mining-progress-shell[data-indeterminate=true] .mining-progress-fill{width:28%;transform:none}}
 
 .mining-progress-shell[data-indeterminate=true][data-active=false] .mining-progress-fill{width:0}
+
+.miner-step-tabs[data-continuous="true"] { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.miner-step-tabs[data-continuous="true"] button[aria-current="step"] { color:#fff; border-color:#eee; background:#252525; }
+.miner-background-queue { margin-top:1rem; padding:.75rem; border:1px solid #383838; font-size:.85rem; }
+@media (max-width:480px) { .miner-step-tabs[data-continuous="true"] button { flex-direction:column; align-items:flex-start; gap:.35rem; } }

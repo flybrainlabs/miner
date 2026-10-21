@@ -106,3 +106,20 @@ checks both execution paths in actual WASM. The opt-in scientific panel requires
 a registered V5 deployment, a personal RPC and a separately approved scoped
 mining-wallet policy. Existing model caches and V4 entitlements are retained.
 See the [V5 specification](https://github.com/flybrainlabs/docs/blob/feat/scientific-mining-20261020/docs/SCIENTIFIC_MINING_V5.md).
+
+## Continuous V4 mining candidate
+
+One-Start preparation, original execution contexts, durable outbox and bounded recovery. The feature branch is `feat/continuous-mining-20261021`.
+
+Run from the assembled workspace with the existing pinned dependencies:
+
+```sh
+node tests/continuous_session_v4.mjs
+node tests/submission_outbox_v4.mjs
+node tests/factory_storage_v4.mjs
+node tests/goal_runner_v2.mjs
+```
+
+See `docs/CONTINUOUS_MINING_V4_20261021.md` and the infrastructure
+`docs/CONTINUOUS_MINING_V4_20261021_ACCEPTANCE.json` for evidence boundaries.
+Source publication does not establish live acceptance or activate the service.

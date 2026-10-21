@@ -7,7 +7,7 @@ export function goalAvailability({network,online,snapshot,serverNow}){
   if(serverNow>=snapshot.round.pre.claimDeadline)return 'new-claims-closed';
   return 'open';
 }
-export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,modelReady,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false,fundingGate=null}){
+export function deriveGoalUiState({network,online,snapshot,serverNow,preparation,modelReady,automaticPreparation=false,preparing=false,running=false,paused=false,reason=null,actionBusy=false,pendingOutputs=0,walletRequired=false,walletConnected=true,walletSignedIn=true,walletRestoring=false,fundingGate=null}){
   const result=(state,button,disabled=false,action='start')=>({state,button,disabled,action,pendingOutputs});
   if(preparing)return result('preparing:'+preparation,'pause-preparation',false,'pause-preparation');
   if(running&&!paused)return result(snapshot?.state==='RESEARCH_STAGE_COMPLETE'?'research-stage-complete':snapshot?.round&&serverNow<snapshot.round.pre.claimDeadline?'running':'waiting-next-goal','pause-mining',false,'pause');
@@ -20,11 +20,11 @@ export function deriveGoalUiState({network,online,snapshot,serverNow,preparation
   if(walletRequired&&!walletSignedIn)return result('wallet-login-required','sign-in',actionBusy,'sign-in');
   if(preparation==='unsupported')return result('unsupported','unsupported',true,'none');
   // Preparing a local model neither enters a round nor authorizes computation.
-  if(modelReady===false)return result('preparation-required','prepare-model',actionBusy,'prepare');
+  if(modelReady===false)return automaticPreparation?result('preparation-required','start-mining',actionBusy,'start'):result('preparation-required','prepare-model',actionBusy,'prepare');
   if(!network.enabled)return result('network-unconfigured','network-unconfigured',true,'configure');
   if(!online)return result('authority-disconnected','retry-network',actionBusy,'sync');
   if(snapshot?.state==='CALIBRATION_REQUIRED')return result('calibration-required','calibration-required',true,'sync');
-  if(snapshot?.state==='RESEARCH_STAGE_COMPLETE')return result('research-stage-complete','check-new-tasks',actionBusy,'sync');
+  if(snapshot?.state==='RESEARCH_STAGE_COMPLETE')return result('waiting-next-goal',paused?'continue-mining':'wait-for-tasks',actionBusy,paused?'resume':'start');
   if(!snapshot?.round&&preparation==='ready')return result('waiting-next-goal',paused?'continue-mining':'wait-for-tasks',actionBusy,paused?'resume':'start');
   if(!snapshot?.round)return result('waiting-next-goal','check-new-tasks',actionBusy,'sync');
   if(serverNow>=snapshot.round.pre.claimDeadline)return result('new-claims-closed','new-claims-closed',true,'sync');

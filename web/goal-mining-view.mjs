@@ -122,17 +122,20 @@ export class GoalMiningView {
   }finally{this.recovering=false;await this.refresh();this.onChange();}
  }
  async recoverOutput(r){
+  const context=r.executionContext,store=context?.store||this.store;
+  if(context&&context.network.campaignId!==r.task.factoryAddress&&r.task.factoryAddress)throw new Error('Original recovery factory mismatch');
   const recover=async()=>{
-   const m=await this.store.metadata(r.task.candidateId),alreadySaved=m.trials.some(t=>t.trialId===r.task.trialId&&t.resultRoot===r.resultHash);if(m.trials.some((t,j)=>t.repeatIndex!==j)||r.task.repeatIndex>m.trials.length)throw new Error(say('请先恢复此候选较早背景的待保存产物。','Recover the earlier pending backgrounds of this candidate first.'));
-   if(!alreadySaved){if(r.archive.size!==r.responseBytes||await digest(await r.archive.arrayBuffer())!==r.resultHash)throw new Error('Retained artifact hash mismatch');await this.store.saveTrial(m,r);}
+   const m=await store.metadata(r.task.candidateId),alreadySaved=m.trials.some(t=>t.trialId===r.task.trialId&&t.resultRoot===r.resultHash);if(m.trials.some((t,j)=>t.repeatIndex!==j)||r.task.repeatIndex>m.trials.length)throw new Error(say('请先恢复此候选较早背景的待保存产物。','Recover the earlier pending backgrounds of this candidate first.'));
+   if(!alreadySaved){if(r.archive.size!==r.responseBytes||await digest(await r.archive.arrayBuffer())!==r.resultHash)throw new Error('Retained artifact hash mismatch');await store.saveTrial(m,r);}
    // Read committed bytes and bindings before releasing the staging copy.
-   await this.store.bundle(m,r.task.repeatIndex);
+   await store.bundle(m,r.task.repeatIndex);
    const terminal=m.terminalCompetition||m.won||['won','winner-confirmed','saved-not-selected','lost','invalid','timed-out','timed_out','round-expired','round-expired-no-valid-result'].includes(m.phase);
-   if(!terminal){const failed=m.trials.some(t=>!t.metrics.passed);m.partial=!failed&&m.trials.length<m.round.pre.requiredBackgrounds;m.searchComplete=failed||!m.partial;m.sciencePassed=!failed&&!m.partial;m.phase=failed?'candidate-failed-science':m.partial?'partial-trial-interrupted':'candidate-saved-passing-awaiting-submit';await this.store.update(m);}
+   if(!terminal){const failed=m.trials.some(t=>!t.metrics.passed);m.partial=!failed&&m.trials.length<m.round.pre.requiredBackgrounds;m.searchComplete=failed||!m.partial;m.sciencePassed=!failed&&!m.partial;m.phase=failed?'candidate-failed-science':m.partial?'partial-trial-interrupted':'candidate-saved-passing-awaiting-submit';await store.update(m);}
    if(r.temporary)try{await releaseOutput(r.temporary);}catch(error){if(error.name!=='NotFoundError')throw error;}
    let stagedInSession=false;for(const [id,p]of this.runner.pendingResults)if(p.task.trialId===r.task.trialId){stagedInSession=true;this.runner.pendingResults.delete(id);}
    const bytes=r.responseBytes+(r.traceBytes?.byteLength||0)+65536;if(stagedInSession&&this.runner.budget){this.runner.budget.stagingBytes=Math.max(0,this.runner.budget.stagingBytes-bytes);if(!alreadySaved)this.runner.budget.savedBytes+=bytes;this.runner.budget.remember();}
-   this.runner.recoverCandidate(m);
+   if(m.sciencePassed){await (context?.outbox||this.runner.outbox)?.enqueue(store,m);this.runner.trackSubmission(m);}
+   if(store===this.store)this.runner.recoverCandidate(m);
   };
   if(navigator.locks?.request)await navigator.locks.request('flypow-output-recovery-'+r.task.trialId,{ifAvailable:true},async lock=>{if(!lock)throw new Error(say('另一页面正在恢复此产物，请稍后重试。','Another page is recovering this artifact; retry shortly.'));await recover();});else await recover();
  }

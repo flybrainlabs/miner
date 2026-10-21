@@ -7,6 +7,7 @@ import {miningWorkflow,showMiningStage,MINING_STEPS} from './mining-workflow.mjs
 import {MinerRpcSettingsV4} from './miner-rpc-settings-v4.mjs';
 import {MinerWalletSetupV4} from './miner-wallet-setup-v4.mjs';
 import {FactoryPoolControllerV4} from './factory-pool-controller-v4.mjs';
+import {SubmissionOutboxV4} from './submission-outbox-v4.mjs';
 import {FactoryMiningClientV4,FactoryMiningContinuationV4,FactorySubmissionV4,factoryWalletAdapter} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
@@ -20,25 +21,35 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     const bindings={client:callbacks=>new FactoryMiningClientV4({deployment:factory,...adapter,...callbacks}),submission:(client,store,onChange)=>new FactorySubmissionV4(client,store,onChange)};
     super({...options,network,financial,bindings});this.factoryDeployment=factory;this.adapter=adapter;financial.miningBalanceReader=adapter.readBalances;this.client.assertMiningAuthorization=adapter.assertMiningAuthorization;this.taskHistory=[];this.submissionRetryAt=new Map();
     this.rpcStep=document.createElement('button');this.rpcStep.id='miner-step-rpc';this.rpcStep.type='button';this.rpcStep.setAttribute('role','tab');this.rpcStep.setAttribute('aria-controls','miner-rpc-settings');this.rpcStep.dataset.noI18n='';
-    const number=document.createElement('span');number.className='miner-step-number';number.textContent='1';this.rpcStepLabel=document.createElement('span');this.rpcStep.append(number,this.rpcStepLabel);document.querySelector('.miner-step-tabs').prepend(this.rpcStep);this.rpcStep.onclick=()=>this.rpcSettings.focus();
-    for(const [index,step]of MINING_STEPS.entries())$('miner-step-'+step).querySelector('.miner-step-number').textContent=String(index+2);
+    const number=document.createElement('span');number.className='miner-step-number';number.textContent='2';this.rpcStepLabel=document.createElement('span');this.rpcStep.append(number,this.rpcStepLabel);document.querySelector('.miner-step-tabs').prepend(this.rpcStep);this.rpcStep.onclick=()=>this.rpcSettings.focus();
+    const tabs=document.querySelector('.miner-step-tabs');tabs.setAttribute('role','navigation');tabs.dataset.continuous='true';
+    const step=(id,number,controls)=>{const button=document.createElement('button'),badge=document.createElement('span'),text=document.createElement('span');button.id=id;button.type='button';button.dataset.noI18n='';button.setAttribute('aria-controls',controls);badge.className='miner-step-number';badge.textContent=number;button.append(badge,text);return {button,text};};
+    const wallet=step('miner-step-wallet','1','mining-wallet-setup'),start=step('miner-step-start','3','miner-stage-mining');this.walletStep=wallet;this.startStep=start;tabs.prepend(wallet.button);tabs.append(start.button);wallet.button.onclick=()=>this.walletSetup.focus();start.button.onclick=()=>$('miner-primary').click();
     this.rpcSettings=new MinerRpcSettingsV4({rpc:adapter.rpc,parent:document.querySelector('.miner-primary-panel .miner-main-actions'),onStateChange:()=>this.rpcStateChanged(),onChange:()=>this.connectRpc()});
-    this.walletSetup=new MinerWalletSetupV4({deployment:factory,financial,adapter,parent:document.querySelector('.miner-step-tabs'),onChange:()=>this.walletStateChanged(),onNeedRpc:()=>this.rpcSettings.focus(),onLock:()=>this.runner.pauseNow('MINING_WALLET_LOCKED')});
+    this.walletSetup=new MinerWalletSetupV4({deployment:factory,financial,adapter,parent:document.querySelector('.miner-step-tabs'),onChange:()=>this.walletStateChanged(),onNeedRpc:()=>this.rpcSettings.focus(),onLock:()=>{this.startController?.cancel('needs-user-action');this.runner.pauseNow('MINING_WALLET_LOCKED');}});
+    this.walletSetup.maintainSession=()=>!this.stopFinishing;
     this.client.assertMiningAuthorization=()=>{adapter.assertMiningAuthorization();if(!this.walletSetup.ready)throw Object.assign(new Error('MINING_WALLET_APPROVAL'),{code:'MINING_WALLET_APPROVAL'});this.walletSetup.policy.assertCanMine();};
+    this.client.assertSubmissionAuthorization=()=>{adapter.assertMiningAuthorization();this.walletSetup.policy.assertAuthorized();};
     this.continuation=new FactoryMiningContinuationV4({client:this.client,runner:this.runner,canPay:()=>this.walletSetup.canMine,hasPendingOutputs:()=>!!this.pending.length,onError:error=>this.onError(error)});
     this.factoryWalletChanged=()=>{const prior=this.client.identity?.publicKey;this.client.bindWallet();if(this.runner.running&&(prior!==this.client.identity?.publicKey||!adapter.isSignedIn()))this.runner.pauseNow(prior!==this.client.identity?.publicKey?'wallet-changed':'wallet-login-required');this.render();this.onChange?.();};financial.addEventListener('change',this.factoryWalletChanged);
     $('miner-target-sync').onclick=()=>{if(!adapter.rpc.ready)return this.rpcSettings.focus();return this.client.sync().then(()=>this.refresh(true)).catch(this.onError);};
     $('miner-round-history-next').hidden=true;
     this.taskPool=factory.taskPool?new FactoryPoolControllerV4(this):null;
+    this.outbox=new SubmissionOutboxV4({contexts:()=>this.taskPool?.contexts.values()||[{deployment:this.factoryDeployment,client:this.client,store:this.store,submission:this.submission}],canCommit:()=>this.runner.running&&this.runner.intent&&!this.runner.paused&&this.walletSetup.canMine,canFinish:()=>this.canFinishSubmissions,onCandidate:m=>this.runner.trackSubmission(m),onChange:()=>{this.refresh().catch(()=>{});}});
+    this.runner.outbox=this.outbox;this.runner.storageContexts=()=>this.taskPool?.contexts.values()||[{store:this.store}];
+    this.configureSubmission(this.submission);
+    this.outboxTimer=setInterval(()=>this.outbox.tick().catch(()=>{}),5000);
   }
+  get canFinishSubmissions(){if(this.stopFinishing||!this.walletSetup.ready)return false;try{this.walletSetup.policy.assertAuthorized();return true;}catch{return false;}}
+  configureSubmission(submission){submission.canCommit=()=>this.runner.running&&this.runner.intent&&!this.runner.paused&&this.walletSetup.canMine;submission.canFinish=()=>this.canFinishSubmissions;}
   rpcStateChanged(){
     if(!this.adapter.rpc.ready&&this.rpcGeneration!==this.adapter.rpc.generation){
-      this.rpcGeneration=this.adapter.rpc.generation;if(this.runner.running)this.runner.pauseNow('rpc-required');this.walletSetup?.policy?.revoke();this.snapshot=null;this.financial.factoryRentQuote=null;this.financial.balances=null;this.financial.changed();
+      this.rpcGeneration=this.adapter.rpc.generation;this.startController?.cancel('needs-user-action');if(this.runner.running)this.runner.pauseNow('rpc-required');this.walletSetup?.policy?.revoke();this.snapshot=null;this.financial.factoryRentQuote=null;this.financial.balances=null;this.financial.changed();
       this.client.suspend(Object.assign(new Error('RPC_REQUIRED'),{code:'RPC_REQUIRED'})).catch(()=>{});
     }
     this.render();this.onChange?.();
   }
-  walletStateChanged(){if(this.runner.running&&(!this.walletSetup.vault.unlocked||this.walletSetup.policy?.blocked||!this.walletSetup.policy?.approved))this.runner.pauseNow(this.walletSetup.policy?.blocked||'MINING_WALLET_LOCKED');this.render();this.onChange?.();}
+  walletStateChanged(){if(this.runner.running&&this.walletSetup.policy?.blocked==='MINING_WALLET_BALANCE'){this.runner.waitCapacity('MINING_WALLET_BALANCE');this.render();return;}if(this.runner.running&&(!this.walletSetup.vault.unlocked||this.walletSetup.policy?.blocked||!this.walletSetup.policy?.approved))this.runner.pauseNow(this.walletSetup.policy?.blocked||'MINING_WALLET_LOCKED');this.render();this.onChange?.();}
   async connectRpc(){
     if(!this.adapter.rpc.ready){this.rpcStateChanged();await this.refresh();return;}
     await this.client.syncing?.catch(()=>{});
@@ -49,25 +60,21 @@ export class FactoryMiningViewV4 extends GoalMiningView {
   async refresh(reconcile=false){
     if(this.refreshing)return;this.refreshing=true;
     try{
-      this.rows=await this.store.list();this.pending=await retainedCandidateOutputs(this.network,this.store);const outputs=new Map(this.pending.map(x=>[x.task.trialId,x]));for(const r of this.runner.pendingResults.values())outputs.set(r.task.trialId,r);this.pending=[...outputs.values()];
+      this.rows=await this.store.list();this.pending=[];for(const c of this.taskPool?.contexts.values()||[{store:this.store,network:this.network,client:this.client}]){const retained=await retainedCandidateOutputs(c.network,c.store);for(const r of retained){r.executionContext={...c,outbox:this.outbox};this.pending.push(r);}}const outputs=new Map(this.pending.map(x=>[x.task.trialId,x]));for(const r of this.runner.pendingResults.values())outputs.set(r.task.trialId,r);this.pending=[...outputs.values()];
+      if(reconcile){this.taskPool?.tick().catch(()=>{});this.outbox.tick().catch(()=>{});}
       if(reconcile&&this.client.online){
-        for(const m of this.rows){
-          if(m.factoryV4?.submission&&(!m.terminalCompetition||m.won&&!m.rewardPaid))try{await this.submission.reconcile(m);}catch(error){m.submissionError||=error.message;}
-          const retryable=['candidate-saved-passing-awaiting-submit','submitting-commitment','committed','uploading','revealing'].includes(m.phase),claimOpen=this.client.serverNow<Number(m.round.pre.claimDeadline),committed=['committed','uploading','revealing'].includes(m.phase);
-          if(m.sciencePassed&&!m.terminalCompetition&&retryable&&(claimOpen||committed)&&this.walletSetup.ready&&(!m.factoryV4||m.factoryV4.miner===this.client.identity?.publicKey)&&Date.now()-(this.submissionRetryAt.get(m.candidateId)||0)>=15000){this.submissionRetryAt.set(m.candidateId,Date.now());this.submission.submit(m.candidateId).catch(async error=>{const latest=await this.store.metadata(m.candidateId);latest.submissionError=error.message;await this.store.update(latest);this.runner.pauseNow(error.code||'submission-error');});}
-        }
         if(Date.now()-(this.historyAt||0)>15000||this.historyNext!==this.client.factory?.nextIndex){const previous=this.taskHistory||[],next=[],f=this.client.factory;for(let i=0;i<(f?.uploaded||0);i++){const saved=previous.find(t=>t.index===i);try{next.push(saved&&(saved.paid||saved.state===0&&i>=f.nextIndex)?saved:await this.client.reader.task(i));}catch{if(saved)next.push(saved);}}this.taskHistory=next;this.historyAt=Date.now();this.historyNext=f?.nextIndex;}
       }
-      if(reconcile&&this.snapshot?.recovery?.kind==='finalize')await this.continuation.tick();
-      if(reconcile)await this.taskPool?.tick();
-      if(reconcile)await this.continuation.tick();
+      if(reconcile&&!this.continuation.pending)this.continuation.tick().catch(()=>{});
+      if(this.runner.capacityWait&&this.runner.intent&&this.walletSetup.canMine&&!this.pending.length){const reason=this.runner.capacityWait,estimate=await navigator.storage.estimate();if(reason==='MINING_WALLET_BALANCE'||reason==='outbox-capacity'&&this.outbox.canAccept(this.runner.reservation,this.runner.budget.reservedBytes)||reason==='browser-space'&&estimate.quota-estimate.usage>2*this.runner.reservation)this.runner.resumeCapacity();}
       this.renderResults();this.render();
     }finally{this.refreshing=false;}
   }
   ui(){
+    if(this.startController?.pending&&this.startController.intent)return {state:this.sessionState?.state||'preparing-model',button:'pause-mining',disabled:false,action:'pause-preparation',pendingOutputs:this.pending.length};
     if(this.sciencePanel?.running)return {state:'science-mining-active',button:'science-mining-active',disabled:true,action:'none',pendingOutputs:0};
     const p=this.state.value.preparation,f=this.snapshot?.factory,walletSignedIn=!!this.adapter?.isSignedIn();
-    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
+    const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,automaticPreparation:true,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
     if(this.walletSetup&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused)&&(this.walletSetup.requiresUnlock||this.adapter.rpc.ready&&(!this.walletSetup.ready||this.runtime.ready&&!this.walletSetup.canMine)))return {state:'mining-wallet-required',button:'configure-mining-wallet',disabled:this.walletSetup.busy||!!this.actionBusy,action:'configure-mining-wallet',pendingOutputs:0};
     if(this.adapter&&!this.adapter.rpc.ready&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused))return {state:'rpc-required',button:this.adapter.rpc.busy?'checking-rpc':'configure-rpc',disabled:this.adapter.rpc.busy||!!this.actionBusy,action:'configure-rpc',pendingOutputs:0};
     const recovery=this.snapshot?.recovery;
@@ -81,10 +88,14 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     this.adapter.assertMiningAuthorization();if(this.recovering)return;this.recovering=true;this.render();
     try{await this.client.recoverTask();await this.refresh(true);}finally{this.recovering=false;this.render();}
   }
-  async prepareMiningSession(){await this.walletSetup.ensureSession();this.client.assertMiningAuthorization();await this.taskPool?.tick({explicit:true});await this.client.sync();if(this.snapshot?.recovery)await this.recoverContractTask();}
+  async prepareMiningSession({activate=true,guard=()=>{}}={}){guard();this.stopFinishing=false;await this.walletSetup.ensureSession();guard();this.client.assertMiningAuthorization();if(activate){if(!this.runtime.ready)throw new Error('Model must be ready before opening a task window');await this.taskPool?.tick({explicit:true});guard();}await this.client.sync();guard();if(activate&&this.snapshot?.recovery)await this.client.recoverTask({beforeSend:guard});}
   render(){
     this.sciencePanel?.render();
     if(!this.runner)return;showMiningStage(document,miningWorkflow(this.state.value.preparation,{ready:this.runtime.ready,running:this.runner.running,pendingOutputs:this.pending.length}));super.render();this.rpcSettings?.render();this.walletSetup?.render();const f=this.snapshot?.factory,t=this.snapshot?.task,r=this.snapshot?.round;this.financial.factorySnapshot=this.snapshot;$('miner-preparation').hidden=this.state.value.preparation.phase==='unsupported';
+    if(this.ui().action==='start'&&!this.runtime.ready&&this.walletSetup.ready&&this.adapter.rpc.ready){
+      setMiningButtonLabel($('miner-primary'),label('start-mining'));$('miner-primary').disabled=!!this.actionBusy;
+      $('miner-status').textContent=say('准备开始挖矿','Ready to start mining');$('miner-guidance').hidden=false;$('miner-guidance').textContent=say('点击一次后自动检查缓存、下载缺失脑数据、校验并加载完整模型，然后持续计算。','Start once to check cached data, download missing brain data, verify and load the complete model, then compute continuously.');
+    }
     if(this.ui().action==='configure-mining-wallet'){
       for(const step of MINING_STEPS){const tab=$('miner-step-'+step);tab.hidden=true;tab.disabled=true;tab.tabIndex=-1;tab.setAttribute('aria-selected','false');tab.setAttribute('aria-current','false');$('miner-stage-'+step).hidden=true;}
       this.rpcStep.hidden=true;$('miner-preparation').hidden=true;$('miner-preparation-progress').hidden=true;$('miner-live-progress').hidden=true;
@@ -122,10 +133,19 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     if($('wallet-mining-round-status'))$('wallet-mining-round-status').textContent=own?.rewardPaid?say('获胜解已确认，奖励已到账','Winning solution confirmed; reward received'):own?.won?say('合约已确认获胜解，奖励结算中','Contract confirmed the winner; payment pending'):own?say(`节点完整重放 ${own.validVotes||0}/2`,`Complete node replay ${own.validVotes||0}/2`):say('由合约验收并自动开启下一任务','The contract accepts results and opens the successor');
     $('miner-mode').textContent=say('合约预设任务 · 节点完整验证','Contract-defined tasks · full node verification');
     $('miner-current-difficulty').textContent=r?'R'+r.pre.requiredBackgrounds:'—';
-    $('miner-difficulty-state').textContent=say('规则和随机背景已预设并冻结；节点不生成或修改任务。','Rules and public backgrounds are frozen in advance; nodes do not generate or modify tasks.');
+    $('miner-difficulty-state').textContent=say('生产器按已审核科学规则准备不同任务；验证节点完整重放。','Approved producers prepare distinct tasks within frozen scientific rules; nodes fully replay results.');
     if(r){const a=document.createElement('a');a.href='https://explorer.solana.com/address/'+r.pre.taskAddress+'?cluster=devnet';a.target='_blank';a.rel='noopener noreferrer';a.textContent=say(`合约任务 ${r.pre.taskIndex+1} · 链上记录`,`Contract task ${r.pre.taskIndex+1} · chain record`);$('miner-target-round').replaceChildren(a);}
     if(this.factoryDeployment&&f)$('miner-target-details').textContent=JSON.stringify({factory:this.factoryDeployment.factory,catalogRoot:this.factoryDeployment.catalogRoot,taskIndex:t?.index,attempt:t?.attempt,rewardFBW:t?atoms(t.descriptor.rewardAtoms):null,requiredBackgrounds:r?.pre.requiredBackgrounds,windows:r?.goal.windows,deadlines:r?{commit:r.pre.claimDeadline,reveal:r.pre.revealDeadline,verification:r.pre.verificationDeadline}:null,source:'finalized Solana task accounts',frozenVerifierQuorum:'2 of 3 trusted keys; currently one operator'},null,2);
-    this.renderCompetition();
+    this.renderMainStages();this.renderCompetition();
+  }
+  renderMainStages(){
+    const ui=this.ui(),stage=this.walletSetup.requiresUnlock?'wallet':!this.adapter.rpc.ready?'rpc':'start';
+    for(const name of MINING_STEPS){const tab=$('miner-step-'+name);tab.hidden=true;tab.removeAttribute('role');}
+    this.walletStep.text.textContent=this.walletSetup.vault.exists?say('解锁钱包','Unlock wallet'):say('创建钱包','Create wallet');this.startStep.text.textContent=say('开始挖矿','Start mining');this.rpcStepLabel.textContent=say('设置 RPC','Set up RPC');
+    for(const [name,button]of [['wallet',this.walletStep.button],['rpc',this.rpcStep],['start',this.startStep.button]]){button.hidden=false;button.disabled=name==='start'&&ui.disabled;button.tabIndex=0;button.removeAttribute('role');button.removeAttribute('aria-selected');button.setAttribute('aria-current',name===stage?'step':'false');button.dataset.status=name===stage?'current':name==='wallet'&&!this.walletSetup.requiresUnlock||name==='rpc'&&this.adapter.rpc.ready?'complete':'pending';}
+    if(this.startController?.intent&&this.startController.pending){setMiningButtonLabel($('miner-primary'),say('暂停挖矿','Pause mining'));$('miner-primary').disabled=false;$('miner-step-note').textContent=say('正在自动准备完整模型与会话；准备完成后自动计算。','Preparing the complete model and session; computation begins automatically when ready.');}
+    if(!this.backgroundQueue){this.backgroundQueue=document.createElement('details');this.backgroundQueue.className='miner-background-queue';this.backgroundQueue.dataset.noI18n='';$('miner-stage-mining').append(this.backgroundQueue);}
+    const queue=this.outbox?.snapshot(),summary=document.createElement('summary');summary.textContent=say('后台提交与结算','Background submission and settlement');const detail=document.createElement('p');detail.textContent=queue?say(`待处理 ${queue.pending} · 正在处理 ${queue.active} · ${(queue.bytes/1048576).toFixed(1)} MiB / ${(queue.maximumBytes/1048576).toFixed(0)} MiB`,`Pending ${queue.pending} · active ${queue.active} · ${(queue.bytes/1048576).toFixed(1)} MiB / ${(queue.maximumBytes/1048576).toFixed(0)} MiB`):'—';const note=document.createElement('p');note.textContent=say('已保存的合格结果在后台上传和对账；其他开放任务可继续计算。已到账余额只统计链上确认的实际余额。','Saved qualified results upload and reconcile in the background while other open tasks compute. Available balances count only confirmed assets.');this.backgroundQueue.replaceChildren(summary,detail,note);
   }
   renderCompetition(){
     const f=this.snapshot?.factory;if(!$('miner-competition-events'))return;
@@ -138,5 +158,5 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     $('miner-round-history').replaceChildren(...(this.taskHistory||[]).map(t=>{const p=document.createElement('p');p.textContent=say(`任务 ${t.index+1} · ${['预设','开放','已完成','失败'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · 已到账':''}`,`Task ${t.index+1} · ${['scheduled','open','solved','failed'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · paid':''}`);return p;}));$('miner-round-history-next').disabled=true;
   }
   renderResults(){super.renderResults();const host=$('miner-goal-result-list');if(!host)return;for(const m of this.rows.filter(x=>x.factoryV4&&x.sciencePassed&&!x.rewardPaid).slice(0,8)){const b=document.createElement('button');b.type='button';b.className='button button-ghost';b.textContent=m.won?say('领取已确认奖励','Claim confirmed reward'):m.phase==='valid'?say('完成合约裁决','Finalize verified solution'):say('核对 / 恢复原提交','Reconcile / resume original submission');b.onclick=async()=>{b.disabled=true;try{this.adapter.assertMiningAuthorization();if(m.won)await this.submission.pay(m);else if(m.phase==='valid')await this.submission.finalize(m);else{await this.submission.reconcile(m);if(!m.terminalCompetition)await this.submission.submit(m.candidateId);}await this.refresh(true);}catch(error){this.onError(error);}finally{b.disabled=false;}};host.append(b);}this.taskPool?.renderPrevious(host);}
-  dispose(){this.taskPool?.dispose();this.walletSetup?.dispose();this.rpcSettings?.dispose();this.rpcStep?.remove();this.financial.removeEventListener('change',this.factoryWalletChanged);super.dispose();}
+  dispose(){clearInterval(this.outboxTimer);this.outbox?.stop();this.taskPool?.dispose();this.walletSetup?.dispose();this.rpcSettings?.dispose();this.rpcStep?.remove();this.financial.removeEventListener('change',this.factoryWalletChanged);super.dispose();}
 }

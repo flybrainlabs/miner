@@ -103,3 +103,19 @@ console.log('Gateway admission faults retain candidate metadata, surface diagnos
  x.runner.financial.requireFunding=async()=>({wallet:'fixture-wallet',grant:'fixture-grant',generation:'1'});await x.runner.resume();await until(()=>x.runner.active.length===2&&x.runner.active.every(e=>e.slot.runtime.data));assert.equal(x.runner.active[0].meta.candidateId,meta.candidateId);assert.deepEqual(x.runner.active[0].meta.input,input);await end(x);
 }
 console.log('RPC 429 before Worker dispatch retains the same candidate/input for explicit retry without executing or saving a fabricated computation.');
+// Manual Pause also cancels an existing automatic capacity-recovery intent.
+{
+ const x=setup();await start(x);x.runner.waitCapacity('outbox-capacity');await until(()=>x.runner.paused);assert(x.runner.intent);x.runner.pauseNow();assert(!x.runner.intent);assert.equal(x.runner.capacityWait,null);x.runner.resumeCapacity();assert(x.runner.paused);await end(x);
+}
+// Stop can arrive while Resume awaits the original RPC. Its late reply must
+// not reactivate computation or create a replacement session.
+{
+ const x=setup();await start(x);x.runner.pauseNow();await until(()=>x.runner.paused);let release;const original=x.client.sync.bind(x.client);x.client.sync=async()=>{await new Promise(ok=>release=ok);return original();};const resuming=x.runner.resume();await until(()=>!!release);x.runner.stopNow();release();await assert.rejects(resuming,{code:'paused'});assert(!x.runner.intent);await end(x);
+}
+// One transient lease renewal affects only that lease and keeps Start intent.
+{
+ const x=setup();await start(x);const e=x.runner.active[0],other=x.runner.active[1];let ticks,calls=0;const original=globalThis.setInterval;e.inputLease={id:'original-lease',sessionId:'original-session',fence:'1'};e.leaseClient={renewInput:async()=>{if(++calls===1)throw Object.assign(new Error('Temporary outage'),{status:503,code:'RPC_UNAVAILABLE'});},releaseInput:async()=>{}};
+ try{globalThis.setInterval=fn=>{ticks=fn;return 0;};x.runner.renewInputLease(e);}finally{globalThis.setInterval=original;}
+ await ticks();assert(x.runner.intent);assert(!e.cancelled);assert.equal(e.leaseError,'RPC_UNAVAILABLE');e.renewAt=0;await ticks();assert.equal(calls,2);assert.equal(e.leaseError,null);e.leaseValidUntil=performance.now()-1;await ticks();await until(()=>e.done);assert(!other.done);assert(x.runner.intent,'a genuinely lost lease does not stop healthy work');await end(x);
+}
+console.log('Capacity Pause, Stop during asynchronous Resume, and transient-versus-lost lease boundaries pass without new dispatch after cancellation (coordinator fixtures).');
