@@ -1,6 +1,6 @@
 import { MiningAnatomy } from './mining-anatomy.mjs';
 import { LiveObservationController, sameScope, epochNow } from './live-observation.mjs';
-const $=id=>document.getElementById(id),say=(zh,en)=>window.FlyI18n?.language?.startsWith('zh')?zh:en,short=s=>String(s||'—').slice(0,10);
+const $=id=>document.getElementById(id),say=(zh,en)=>window.FlyI18n?.language?.startsWith('zh')?zh:(window.FlyI18n?.t?.(en)||en),short=s=>String(s||'—').slice(0,10);
 export class LiveObservationView {
   constructor({config,t=s=>s,onSubscribe=()=>{},onAck=()=>{},onRequest=()=>{}}={}){
     Object.assign(this,{config,t,onSubscribe,onAck,onRequest,visible:true,graphicsEnabled:true,mode:'b',frame:null,geometrySelection:null,raf:null});
