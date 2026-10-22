@@ -45,6 +45,8 @@
     "tests/e2e_scientific_v5.py": "tests/e2e_scientific_v5.py",
     "tests/e2e_target_cache_continuity.py": "tests/e2e_target_cache_continuity.py",
     "tests/factory_storage_v4.mjs": "tests/factory_storage_v4.mjs",
+    "tests/factory_storage_browser_v4.mjs": "tests/factory_storage_browser_v4.mjs",
+    "tests/factory_storage_browser_v4.py": "tests/factory_storage_browser_v4.py",
     "tests/finish_browser_acceptance_v3.py": "tests/finish_browser_acceptance_v3.py",
     "tests/fixtures/official-download-worker.mjs": "tests/fixtures/official-download-worker.mjs",
     "tests/fixtures/queue-blocks.json": "tests/fixtures/queue-blocks.json",

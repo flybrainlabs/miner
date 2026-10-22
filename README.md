@@ -118,7 +118,15 @@ node tests/continuous_session_v4.mjs
 node tests/submission_outbox_v4.mjs
 node tests/factory_storage_v4.mjs
 node tests/goal_runner_v2.mjs
+python3 tests/factory_storage_browser_v4.py --output /path/to/fresh-storage-evidence
 ```
+
+The browser test kills a fresh Chromium process at six OPFS save/index/outbox
+boundaries and reopens its retained profile. Complete receipts recover, incomplete
+files remain incomplete, and the outbox scans saved candidates without requiring
+an earlier enqueue marker. Scientific events and submission I/O are fixtures;
+this test performs no live computation, signing or financial action. It requires
+Selenium, Chromium and its matching driver and retains each acceptance profile.
 
 See `docs/CONTINUOUS_MINING_V4_20261021.md` and the infrastructure
 `docs/CONTINUOUS_MINING_V4_20261021_ACCEPTANCE.json` for evidence boundaries.
