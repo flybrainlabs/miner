@@ -2,6 +2,15 @@ import {say} from './goal-status-text.mjs';
 import {MiningWalletV4,MiningWalletPolicyV4,MiningWalletPoolPolicyV4,newMiningMnemonic} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const el=(tag,text='',cls='')=>{const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n;};
 const sol=value=>{const n=BigInt(value||0),fraction=(n%1000000000n).toString().padStart(9,'0').replace(/0+$/,'');return (n/1000000000n).toString()+(fraction?'.'+fraction:'');};
+const automaticPaymentText={
+ en:'Entering the correct password unlocks this wallet and enables automatic account deposits and network fees for the verified mining task pool during this unlocked session, without a spending budget. Select Start mining to compute. Lock the wallet to stop new payments.',
+ zh:'输入正确密码后，钱包自动解锁，并在本次解锁期间为已核验挖矿任务池自动支付账户押金和网络费，不设支出预算上限。点击“开始挖矿”后计算；锁定钱包可停止新支付。',
+ fr:'Le mot de passe correct déverrouille ce portefeuille et active les dépôts de compte et frais réseau automatiques pour le pool de minage vérifié pendant cette session, sans budget de dépense. Démarrez le minage pour calculer. Verrouillez le portefeuille pour arrêter les nouveaux paiements.',
+ ru:'Правильный пароль разблокирует кошелёк и включает автоматические депозиты счетов и сетевые комиссии проверенного пула заданий на время этой сессии без бюджета расходов. Запустите майнинг для вычислений. Заблокируйте кошелёк, чтобы остановить новые платежи.',
+ ja:'正しいパスワードを入力するとウォレットが解除され、このセッション中は検証済みタスクプールの口座預託金とネットワーク手数料を支出予算の上限なしで自動支払いします。計算にはマイニング開始を選択してください。ロックすると新規支払いを停止します。',
+ ko:'올바른 비밀번호를 입력하면 지갑이 잠금 해제되고 이 세션 동안 검증된 채굴 작업 풀의 계정 보증금과 네트워크 수수료 자동 결제가 지출 예산 한도 없이 활성화됩니다. 계산하려면 채굴 시작을 선택하세요. 지갑을 잠그면 새 결제가 중단됩니다.'
+};
+const automaticPaymentNotice=()=>automaticPaymentText[window.FlyI18n?.language]||automaticPaymentText.en;
 const messages={
   MINING_WALLET_PHRASE:['助记词格式或校验不正确，请核对顺序与拼写。','Check the recovery phrase, word order and spelling.'],
   MINING_WALLET_BACKUP:['请先离线保存助记词，再正确填写指定的三个词。','Save your phrase offline, then enter the three requested words.'],
@@ -10,7 +19,7 @@ const messages={
   MINING_WALLET_UNLOCK:['无法解锁，请核对本机密码；也可使用助记词恢复。','Unable to unlock. Check the local password or restore with your phrase.'],
   MINING_WALLET_STORAGE:['浏览器未能保存加密钱包。请保留助记词并检查存储权限。','The browser could not save the encrypted wallet. Keep your phrase and check storage permission.'],
   MINING_WALLET_BALANCE:['SOL 不足，请向下方地址转入当前网络的 SOL 后刷新余额。','Insufficient SOL. Fund the address on the displayed network, then refresh.'],
-  MINING_WALLET_APPROVAL:['请先启用当前挖矿合约的自动支付。','Enable automatic payments for the current mining contract first.'],
+  MINING_WALLET_APPROVAL:['自动支付尚未就绪，请检查个人 RPC 和钱包余额。','Automatic payments are not ready. Check your personal RPC and wallet balance.'],
   MINING_WALLET_LOCKED:['专用钱包已锁定，挖矿支付已停止。请用本机密码解锁。','The mining wallet is locked and payments stopped. Unlock with your local password.'],
   MINING_WALLET_CHALLENGE:['登录消息不符合本站和当前网络，已拒绝签名。','The login message differs from this site or network; signing was refused.'],
   MINING_WALLET_TRANSACTION:['交易超出当前挖矿合约范围，已拒绝签名。','The transaction is outside this mining contract; signing was refused.'],
@@ -38,7 +47,7 @@ export class MinerWalletSetupV4 {
   failed(error){this.error=error.code||'MINING_WALLET_RETRY';this.render();this.onChange();}
   async operate(fn){if(this.busy)return;this.busy=true;this.error=null;this.render();this.onChange();try{await fn();}catch(error){this.failed(error);}finally{this.busy=false;this.render();this.onChange();}}
   focus(){this.root.open=true;this.root.scrollIntoView({block:'start',behavior:'smooth'});this.body.querySelector('input,textarea,button')?.focus({preventScroll:true});}
-  lock(){this.onLock();this.payConsent=null;this.vault.lock();if(this.financial.account?.address===this.vault.address)this.financial.clearLogin();this.mode='unlock';this.bodyKey=null;this.render();}
+  lock(){clearTimeout(this.unlockTimer);this.root.open=true;this.onLock();this.payConsent=null;this.vault.lock();if(this.financial.account?.address===this.vault.address)this.financial.clearLogin();this.mode='unlock';this.bodyKey=null;this.render();}
   button(text,fn,cls='button button-ghost'){const n=el('button',text,cls);n.type='button';n.onclick=()=>this.operate(fn);return n;}
   field(label,type='password',id=''){const host=el('label',label),input=el('input');input.type=type;if(id)input.id=id;input.autocomplete=type==='password'?'new-password':'off';input.spellcheck=false;input.setAttribute('autocapitalize','none');host.append(input);return {host,input};}
   async ensureSession(){
@@ -50,16 +59,12 @@ export class MinerWalletSetupV4 {
     })().finally(()=>this.sessionPending=null);return this.sessionPending;
   }
   async connected(){if(!this.vault.unlocked||!this.adapter.rpc.ready)return;await this.ensureSession();await this.refreshQuote();await this.activateConsent();}
-  paymentConsent(form,id){
-    const host=el('label','','mining-wallet-consent'),input=el('input');input.type='checkbox';input.id=id;input.required=true;
-    host.append(input,el('span',say('本次解锁期间，允许为已核验任务池自动支付 PDA 押金与 Solana 网络费，不设支出预算上限。未获奖提交也可能产生不可退的网络费及当前无法取回的账户押金。暂停停止新 Commit；已有 Commit 可继续必要 Reveal。锁定钱包或停止支付阻止新签名与发送，已广播交易继续对账。','For this unlocked session, allow automatic PDA deposits and Solana network fees within the verified task pool, without a spending budget. Nonwinning submissions may also incur network fees and deposits that cannot currently be reclaimed. Pause stops new commitments; existing commitments may complete necessary reveals. Locking or stopping payments blocks new signatures and sends; broadcast transactions remain reconcilable.')));form.append(host);return input;
-  }
-  recordConsent(input){if(!input.checked)throw {code:'MINING_WALLET_APPROVAL'};this.payConsent={generation:this.vault.generation,address:this.vault.address,program:this.deployment.programId,genesis:this.deployment.genesisHash,pool:this.deployment.taskPool?.trust?.poolId||this.deployment.factory};}
+  paymentNotice(form){form.append(el('p',automaticPaymentNotice(),'field-note'));}
+  recordConsent(){this.vault.assertUnlocked();this.payConsent={generation:this.vault.generation,address:this.vault.address,program:this.deployment.programId,genesis:this.deployment.genesisHash,pool:this.deployment.taskPool?.trust?.poolId||this.deployment.factory};}
   async activateConsent(){
     const consent=this.payConsent;if(!consent||consent.generation!==this.vault.generation||consent.address!==this.vault.address||!this.adapter.rpc.ready)return;
     await this.ensureSession();if(consent!==this.payConsent||consent.generation!==this.vault.generation)return;
-    if(!this.policy.approved){await this.policy.approve();if(consent!==this.payConsent||consent.generation!==this.vault.generation){this.policy.revoke();return;}}
-    this.root.open=false;
+    if(!this.policy.approved){await this.policy.approve();if(consent!==this.payConsent||consent.generation!==this.vault.generation){this.policy.revoke();return;}this.root.open=false;}
   }
   async refreshQuote(){
     if(this.quoting)return;this.quoting=true;
@@ -75,7 +80,7 @@ export class MinerWalletSetupV4 {
   }
   intro(){
     const grid=el('div','','mining-wallet-columns'),main=el('div');main.append(el('p',say('为挖矿单独准备的钱包','A WALLET JUST FOR MINING'),'mining-wallet-eyebrow'),el('h2',say('一次准备，链上成本自动支付','Set up once. Pay chain costs automatically.')),el('p',say('频繁的钱包插件确认可能打断提交。专用钱包在本机签名，只为当前挖矿合约支付链上成本；你的日常钱包无需反复连接。','Repeated extension prompts can interrupt submissions. This dedicated wallet signs on your device and pays chain costs only for the current mining contract. Your everyday wallet can stay separate.')));
-    const actions=el('div','','mining-wallet-actions');actions.append(this.button(say('创建挖矿钱包','Create mining wallet'),async()=>{this.phrase=newMiningMnemonic();this.indices=[];while(this.indices.length<3){const n=crypto.getRandomValues(new Uint32Array(1))[0]%12;if(!this.indices.includes(n))this.indices.push(n);}this.indices.sort((a,b)=>a-b);this.revealed=false;this.mode='backup';this.bodyKey=null;},'button'),this.button(say('用助记词恢复','Restore with recovery phrase'),async()=>{this.mode='restore';this.bodyKey=null;}));main.append(actions,el('p',say('助记词只在本机生成。项目团队不会索取、上传或代存。','The phrase is generated on your device. The project team does not request, upload or keep it.'),'field-note'));grid.append(main,this.costs());this.body.append(grid);
+    const actions=el('div','','mining-wallet-actions');actions.append(this.button(say('创建挖矿钱包','Create mining wallet'),async()=>{this.phrase=newMiningMnemonic();this.indices=[];while(this.indices.length<3){const n=crypto.getRandomValues(new Uint32Array(1))[0]%12;if(!this.indices.includes(n))this.indices.push(n);}this.indices.sort((a,b)=>a-b);this.revealed=true;this.mode='backup';this.bodyKey=null;},'button'),this.button(say('用助记词恢复','Restore with recovery phrase'),async()=>{this.mode='restore';this.bodyKey=null;}));main.append(actions,el('p',say('助记词只在本机生成。项目团队不会索取、上传或代存。','The phrase is generated on your device. The project team does not request, upload or keep it.'),'field-note'));grid.append(main,this.costs());this.body.append(grid);
   }
   backup(){
     this.body.append(el('h2',say('先离线保存这 12 个词','First, save these 12 words offline')),el('p',say('助记词是恢复钱包和资金的凭证。按顺序抄写并妥善保管；不要发给任何人。丢失助记词后，团队无法帮你恢复钱包。','Your phrase restores this wallet and its funds. Write the words in order and keep them private. The team cannot restore a lost phrase.')));
@@ -92,14 +97,16 @@ export class MinerWalletSetupV4 {
     else{const grid=el('div','','mining-wallet-quiz');for(const index of this.indices){const field=this.field(say(`第 ${index+1} 个词`,`Word ${index+1}`),'text','mining-wallet-word-'+index);field.input.required=true;field.input.dataset.sensitive='true';answers.push(field.input);grid.append(field.host);}form.append(grid);}
     const password=this.field(say('本机加密密码（至少 12 个字符）','Local encryption password (at least 12 characters)'),'password','mining-wallet-password'),repeat=this.field(say('再次输入密码','Confirm password'),'password','mining-wallet-password-confirm');password.input.required=repeat.input.required=true;password.input.minLength=repeat.input.minLength=12;form.append(password.host,repeat.host,el('p',say('密码用于加密本浏览器的钱包副本，不改变助记词。刷新后需解锁；忘记密码可用助记词恢复。','This password encrypts the browser copy and does not change your phrase. Unlock after reload; use your phrase if the password is lost.'),'field-note'));
     const confirmation=el('label','','mining-wallet-consent'),consent=el('input');consent.type='checkbox';consent.id='mining-wallet-backup-confirm';consent.required=true;confirmation.append(consent,el('span',say('我已安全保存助记词，明白团队无法代为找回。','I have securely saved the phrase and understand the team cannot recover it.')));form.append(confirmation);
-    const paymentConsent=this.paymentConsent(form,'mining-wallet-session-consent');
+    this.paymentNotice(form);
     const submit=el('button',restore?say('恢复并加密钱包','Restore and encrypt wallet'):say('确认备份，创建钱包','Confirm backup and create wallet'),'button');submit.id='mining-wallet-save';submit.type='submit';form.append(submit);
-    form.onsubmit=event=>{event.preventDefault();this.operate(async()=>{if(password.input.value!==repeat.input.value)throw {code:'MINING_WALLET_PASSWORD_MATCH'};if(!paymentConsent.checked)throw {code:'MINING_WALLET_APPROVAL'};await this.vault.save(restore?phrase.value:this.phrase,password.input.value,{confirmed:consent.checked,restored:restore,indices:this.indices,answers:answers.map(n=>n.value)});this.recordConsent(paymentConsent);password.input.value=repeat.input.value='';if(phrase)phrase.value='';this.phrase=null;this.mode='fund';this.bodyKey=null;if(this.adapter.rpc.ready)await this.connected();});};this.body.append(form,this.button(say('返回','Back'),async()=>{this.mode=restore?(this.vault.exists?'unlock':'intro'):'backup';this.bodyKey=null;}));
+    form.onsubmit=event=>{event.preventDefault();this.operate(async()=>{if(password.input.value!==repeat.input.value)throw {code:'MINING_WALLET_PASSWORD_MATCH'};await this.vault.save(restore?phrase.value:this.phrase,password.input.value,{confirmed:consent.checked,restored:restore,indices:this.indices,answers:answers.map(n=>n.value)});this.recordConsent();password.input.value=repeat.input.value='';if(phrase)phrase.value='';this.phrase=null;this.mode='fund';this.bodyKey=null;if(this.adapter.rpc.ready)await this.connected();});};this.body.append(form,this.button(say('返回','Back'),async()=>{this.mode=restore?(this.vault.exists?'unlock':'intro'):'backup';if(this.mode==='backup')this.revealed=true;this.bodyKey=null;}));
   }
   unlock(){
-    this.body.append(el('h2',say('解锁专用挖矿钱包','Unlock your mining wallet')),el('p',say('本浏览器中只保存加密副本。确认本次解锁的自动支付范围，设置 RPC 后点击“开始挖矿”。','Only an encrypted copy is saved here. Confirm this unlocked session’s payment scope, set up RPC, then select Start mining.')));
+    this.body.append(el('h2',say('解锁专用挖矿钱包','Unlock your mining wallet')),el('p',automaticPaymentNotice()));
     if(this.vault.address)this.body.append(el('code',this.vault.address,'mining-wallet-address'));
-    const form=el('form'),password=this.field(say('本机加密密码','Local encryption password'),'password','mining-wallet-unlock-password');password.input.autocomplete='current-password';password.input.required=true;form.append(password.host);const paymentConsent=this.paymentConsent(form,'mining-wallet-unlock-consent');const button=el('button',say('解锁钱包','Unlock wallet'),'button');button.id='mining-wallet-unlock';button.type='submit';form.append(button);form.onsubmit=event=>{event.preventDefault();this.operate(async()=>{if(!paymentConsent.checked)throw {code:'MINING_WALLET_APPROVAL'};await this.vault.unlock(password.input.value);this.recordConsent(paymentConsent);password.input.value='';this.mode='fund';this.bodyKey=null;if(this.adapter.rpc.ready)await this.connected();});};this.body.append(form,this.button(say('忘记密码？用助记词恢复','Forgot password? Restore with your phrase'),async()=>{this.mode='restore';this.bodyKey=null;}));
+    const form=el('form'),password=this.field(say('本机加密密码','Local encryption password'),'password','mining-wallet-unlock-password');password.input.autocomplete='current-password';password.input.required=true;password.input.minLength=12;form.append(password.host);const button=el('button',say('解锁钱包','Unlock wallet'),'button');button.id='mining-wallet-unlock';button.type='submit';form.append(button);
+    const unlock=()=>{clearTimeout(this.unlockTimer);if(this.busy||this.mode!=='unlock'||!password.input.isConnected||password.input.value.length<12)return;this.operate(async()=>{await this.vault.unlock(password.input.value);this.recordConsent();password.input.value='';this.mode='fund';this.bodyKey=null;if(this.adapter.rpc.ready)await this.connected();});};
+    password.input.oninput=()=>{clearTimeout(this.unlockTimer);if(password.input.value.length>=12)this.unlockTimer=setTimeout(unlock,650);};form.onsubmit=event=>{event.preventDefault();unlock();};this.body.append(form,this.button(say('忘记密码？用助记词恢复','Forgot password? Restore with your phrase'),async()=>{clearTimeout(this.unlockTimer);this.mode='restore';this.bodyKey=null;}));
   }
   funding(){
     const grid=el('div','','mining-wallet-columns'),main=el('div');main.append(el('h2',say('转入 SOL，用于链上租金与手续费','Fund on-chain rent and transaction fees')));
@@ -127,5 +134,5 @@ export class MinerWalletSetupV4 {
     if(this.focusPending&&!this.busy){this.focusPending=false;if(this.root.open&&(document.activeElement===document.body||this.root.contains(document.activeElement))){const target=['verify','restore','unlock'].includes(this.mode)?this.body.querySelector('input,textarea'):this.body.querySelector('h2');if(target){if(target.tagName==='H2')target.tabIndex=-1;target.focus();}}}
     this.root.setAttribute('aria-busy',String(this.busy));this.note.textContent=this.error?say(...(messages[this.error]||['操作未完成，请检查个人 RPC 与网络后重试。','Operation incomplete. Check your personal RPC and network, then retry.'])):this.busy?say('正在本机处理，请稍候…','Processing on this device…'):'';
   }
-  dispose(){clearInterval(this.timer);document.removeEventListener('visibilitychange',this.visibility);this.phrase=null;this.vault.lock();this.financial.miningWalletControls=null;this.root.remove();}
+  dispose(){clearTimeout(this.unlockTimer);clearInterval(this.timer);document.removeEventListener('visibilitychange',this.visibility);this.phrase=null;this.vault.lock();this.financial.miningWalletControls=null;this.root.remove();}
 }
