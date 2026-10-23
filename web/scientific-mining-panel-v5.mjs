@@ -62,7 +62,7 @@ export class ScientificMiningPanelV5 {
   async export(){if(!this.saved)return;const {salt,archives,...record}=this.saved;const bytes=JSON.stringify({...record,scope:'computational-model study; operator independence and biological validity are not established'},null,2),url=URL.createObjectURL(new Blob([bytes],{type:'application/json'})),a=make('a');a.href=url;a.download='flybrainwork-scientific-evidence.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 }
 export async function attachScientificMining(view){
-  try{const response=await fetch('/assets/data/scientific-deployment-v5.json',{cache:'no-store'});if(!response.ok)return null;const d=await response.json();if(d.schema!=='flybrain-scientific-deployment-v5')return null;
+  try{const response=await fetch('/assets/data/scientific-deployment-v5.json',{cache:'no-store'});if(!response.ok)return null;const d=await response.json();if(d.schema!=='flybrain-scientific-deployment-v5'||d.enabled!==true)return null;
     if(d.enabled&&(['programId','genesisHash','policyHash','mint'].some(k=>d[k]!==view.factoryDeployment[k])||new URL(d.apiBase).origin!==new URL(view.factoryDeployment.apiBase).origin))throw new Error('Scientific deployment differs from the registered network');
     return new ScientificMiningPanelV5(view,d);
   }catch{return null;}

@@ -14,6 +14,15 @@ export function taskSupplySampleV4(value,now=Date.now()){
  return {remaining,open,ready:value.businessReady===true,budgetExhausted:value.verifier?.supply?.code==='POOL_REWARD_AUTHORIZATION_EXHAUSTED',checkedAt:now};
 }
 
+const workflowText={
+ en:'Start once to stay in the mining session and continue automatically when funded task windows are available. Rewards follow each task’s registered rules and confirmed on-chain results.',
+ zh:'开始一次即可保持挖矿会话，有可用的已资助任务窗口时自动接续。奖励以每项任务的已登记规则和链上确认结果为准。',
+ fr:'Démarrez une fois pour rester dans la session et continuer automatiquement lorsque des tâches financées sont disponibles. Les récompenses suivent les règles enregistrées de chaque tâche et les résultats confirmés sur la chaîne.',
+ ru:'Запустите майнинг один раз, чтобы оставаться в сессии и автоматически продолжать при появлении доступных оплаченных заданий. Награды зависят от зарегистрированных правил задания и подтверждённых результатов в блокчейне.',
+ ja:'一度開始するとセッションを維持し、資金確保済みタスクの受付枠が利用可能になったときに自動で続行します。報酬は各タスクの登録ルールとオンチェーンで確認された結果に従います。',
+ ko:'한 번 시작하면 채굴 세션을 유지하고 보상이 확보된 작업 창을 이용할 수 있을 때 자동으로 이어갑니다. 보상은 각 작업의 등록된 규칙과 블록체인에서 확인된 결과를 따릅니다.'
+};
+
 // Health is informational. This component never grants a wallet capability,
 // opens a task, accepts a catalog, signs a transaction or receives an RPC key.
 export class TaskSupplyStatusV4 {
@@ -21,7 +30,7 @@ export class TaskSupplyStatusV4 {
   Object.assign(this,{document,window,fetch,clock});const base=new URL(apiBase);
   if(base.protocol!=='https:'&&!(base.protocol==='http:'&&['127.0.0.1','localhost'].includes(base.hostname))||base.username||base.password||base.search||base.hash)throw new Error('TASK_SUPPLY_ORIGIN');
   this.url=new URL('/api/task-factory/v4/health',base.origin);this.root=document.createElement('section');this.root.id='miner-task-supply';this.root.className='miner-target-card';this.root.dataset.noI18n='';
-  this.title=document.createElement('h3');this.inventory=document.createElement('p');this.state=document.createElement('p');this.budget=document.createElement('p');this.scope=document.createElement('p');this.sampleTime=document.createElement('p');this.sampleTime.className='muted';this.root.append(this.title,this.inventory,this.state,this.budget,this.scope,this.sampleTime);parent.append(this.root);
+  this.title=document.createElement('h3');this.workflow=document.createElement('p');this.workflow.id='miner-task-supply-workflow';this.inventory=document.createElement('p');this.inventory.id='miner-task-supply-inventory';this.state=document.createElement('p');this.budget=document.createElement('p');this.scope=document.createElement('p');this.sampleTime=document.createElement('p');this.sampleTime.className='muted';this.root.append(this.title,this.workflow,this.inventory,this.state,this.budget,this.scope,this.sampleTime);parent.append(this.root);
   this.language=()=>this.render();document.addEventListener('flypow:language',this.language);this.render();
  }
  async refresh(){
@@ -33,7 +42,7 @@ export class TaskSupplyStatusV4 {
  start(){if(this.timer||this.stopped)return;this.refresh();this.timer=this.window.setInterval(()=>{this.render();this.refresh();},30000);}
  render(){
   const m=messages[this.window.FlyI18n?.language]||messages.en,s=this.sample,fresh=s&&!this.failed&&this.clock()-s.checkedAt<75000;
-  this.title.textContent=m.title;this.scope.textContent=m.scope;this.root.dataset.state=fresh?(s.ready?s.open?'open':s.remaining?'standby':'empty':'unready'):this.failed||s?'unavailable':'checking';
+  this.title.textContent=m.title;this.workflow.textContent=workflowText[this.window.FlyI18n?.language]||workflowText.en;this.scope.textContent=m.scope;this.root.dataset.state=fresh?(s.ready?s.open?'open':s.remaining?'standby':'empty':'unready'):this.failed||s?'unavailable':'checking';
   this.inventory.hidden=!fresh;this.budget.hidden=!fresh||!s?.budgetExhausted;
   if(fresh){this.inventory.textContent=m.inventory.replace('{remaining}',s.remaining).replace('{open}',s.open);this.state.textContent=!s.ready?m.busy:s.open?m.ready:s.remaining?m.standby:m.empty;this.budget.textContent=m.budget;}
   else this.state.textContent=this.failed||s?m.offline:m.checking;
