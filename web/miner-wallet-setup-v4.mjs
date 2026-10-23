@@ -62,9 +62,13 @@ export class MinerWalletSetupV4 {
   paymentNotice(form){form.append(el('p',automaticPaymentNotice(),'field-note'));}
   recordConsent(){this.vault.assertUnlocked();this.payConsent={generation:this.vault.generation,address:this.vault.address,program:this.deployment.programId,genesis:this.deployment.genesisHash,pool:this.deployment.taskPool?.trust?.poolId||this.deployment.factory};}
   async activateConsent(){
+    if(this.activationPending)return this.activationPending;
     const consent=this.payConsent;if(!consent||consent.generation!==this.vault.generation||consent.address!==this.vault.address||!this.adapter.rpc.ready)return;
-    await this.ensureSession();if(consent!==this.payConsent||consent.generation!==this.vault.generation)return;
-    if(!this.policy.approved){await this.policy.approve();if(consent!==this.payConsent||consent.generation!==this.vault.generation){this.policy.revoke();return;}this.root.open=false;}
+    const rpcGeneration=this.adapter.rpc.generation,current=()=>consent===this.payConsent&&consent.generation===this.vault.generation&&rpcGeneration===this.adapter.rpc.generation&&this.adapter.rpc.ready;
+    this.activationPending=(async()=>{
+      await this.ensureSession();if(!current())return;const policy=this.policy;
+      if(!policy.approved){await policy.approve();if(!current()||policy!==this.policy){policy.revoke();return;}this.root.open=false;}
+    })().finally(()=>this.activationPending=null);return this.activationPending;
   }
   async refreshQuote(){
     if(this.quoting)return;this.quoting=true;
