@@ -8,6 +8,7 @@ import {MinerRpcSettingsV4} from './miner-rpc-settings-v4.mjs';
 import {MinerWalletSetupV4} from './miner-wallet-setup-v4.mjs';
 import {FactoryPoolControllerV4} from './factory-pool-controller-v4.mjs';
 import {SubmissionOutboxV4} from './submission-outbox-v4.mjs';
+import {TaskSupplyStatusV4} from './task-supply-status-v4.mjs';
 import {FactoryMiningClientV4,FactoryMiningContinuationV4,FactorySubmissionV4,factoryWalletAdapter} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
@@ -28,6 +29,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     this.rpcSettings=new MinerRpcSettingsV4({rpc:adapter.rpc,parent:document.querySelector('.miner-primary-panel .miner-main-actions'),onStateChange:()=>this.rpcStateChanged(),onChange:()=>this.connectRpc()});
     this.walletSetup=new MinerWalletSetupV4({deployment:factory,financial,adapter,parent:document.querySelector('.miner-step-tabs'),onChange:()=>this.walletStateChanged(),onNeedRpc:()=>this.rpcSettings.focus(),onLock:()=>{this.startController?.cancel('needs-user-action');this.runner.pauseNow('MINING_WALLET_LOCKED');}});
     this.walletSetup.maintainSession=()=>!this.stopFinishing;
+    this.walletSetup.backgroundMining=()=>!!(this.runner.running&&this.runner.intent||this.startController?.intent);
     this.client.assertMiningAuthorization=()=>{adapter.assertMiningAuthorization();if(!this.walletSetup.ready)throw Object.assign(new Error('MINING_WALLET_APPROVAL'),{code:'MINING_WALLET_APPROVAL'});this.walletSetup.policy.assertCanMine();};
     this.client.assertSubmissionAuthorization=()=>{adapter.assertMiningAuthorization();this.walletSetup.policy.assertAuthorized();};
     this.continuation=new FactoryMiningContinuationV4({client:this.client,runner:this.runner,canPay:()=>this.walletSetup.canMine,hasPendingOutputs:()=>!!this.pending.length,onError:error=>this.onError(error)});
@@ -35,6 +37,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     $('miner-target-sync').onclick=()=>{if(!adapter.rpc.ready)return this.rpcSettings.focus();return this.client.sync().then(()=>this.refresh(true)).catch(this.onError);};
     $('miner-round-history-next').hidden=true;
     this.taskPool=factory.taskPool?new FactoryPoolControllerV4(this):null;
+    this.supplyStatus=this.taskPool?new TaskSupplyStatusV4({apiBase:factory.apiBase,parent:$('miner-target-card').parentElement}):null;if(this.supplyStatus)$('miner-target-card').before(this.supplyStatus.root);
     this.outbox=new SubmissionOutboxV4({contexts:()=>this.taskPool?.contexts.values()||[{deployment:this.factoryDeployment,client:this.client,store:this.store,submission:this.submission}],canCommit:()=>this.runner.running&&this.runner.intent&&!this.runner.paused&&this.walletSetup.canMine,canFinish:()=>this.canFinishSubmissions,onCandidate:m=>this.runner.trackSubmission(m),onChange:()=>{this.refresh().catch(()=>{});}});
     this.runner.outbox=this.outbox;this.runner.storageContexts=()=>this.taskPool?.contexts.values()||[{store:this.store}];
     this.configureSubmission(this.submission);
@@ -56,7 +59,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     try{await this.client.initialize();this.financial.factoryRentQuote=String(await this.client.reader.connection.getMinimumBalanceForRentExemption(768,'finalized'));try{await this.walletSetup.connected();}catch(error){this.walletSetup.failed(error);}if(this.adapter.isSignedIn())await this.financial.refresh().catch(()=>{});await this.refresh(true);this.rpcSettings.root.open=false;}
     catch(error){this.client.disconnected(error);if(this.adapter.rpc.ready)this.client.startPolling();throw error;}
   }
-  async initialize(){await this.walletSetup.initialize();this.client.bindWallet();await this.adapter.rpc.initialize();await this.refresh();if(this.adapter.rpc.ready)try{await this.connectRpc();}catch{}this.recoveryTimer=setInterval(()=>{if(!document.hidden)this.refresh(this.adapter.rpc.ready).catch(()=>{});},5000);this.render();}
+  async initialize(){this.supplyStatus?.start();await this.walletSetup.initialize();this.client.bindWallet();await this.adapter.rpc.initialize();await this.refresh();if(this.adapter.rpc.ready)try{await this.connectRpc();}catch{}this.recoveryTimer=setInterval(()=>{if(!document.hidden||this.runner.intent||this.startController?.intent)this.refresh(this.adapter.rpc.ready).catch(()=>{});},5000);this.render();}
   async refresh(reconcile=false){
     if(this.refreshing)return;this.refreshing=true;
     try{
@@ -158,5 +161,5 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     $('miner-round-history').replaceChildren(...(this.taskHistory||[]).map(t=>{const p=document.createElement('p');p.textContent=say(`任务 ${t.index+1} · ${['预设','开放','已完成','失败'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · 已到账':''}`,`Task ${t.index+1} · ${['scheduled','open','solved','failed'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · paid':''}`);return p;}));$('miner-round-history-next').disabled=true;
   }
   renderResults(){super.renderResults();const host=$('miner-goal-result-list');if(!host)return;for(const m of this.rows.filter(x=>x.factoryV4&&x.sciencePassed&&!x.rewardPaid).slice(0,8)){const b=document.createElement('button');b.type='button';b.className='button button-ghost';b.textContent=m.won?say('领取已确认奖励','Claim confirmed reward'):m.phase==='valid'?say('完成合约裁决','Finalize verified solution'):say('核对 / 恢复原提交','Reconcile / resume original submission');b.onclick=async()=>{b.disabled=true;try{this.adapter.assertMiningAuthorization();if(m.won)await this.submission.pay(m);else if(m.phase==='valid')await this.submission.finalize(m);else{await this.submission.reconcile(m);if(!m.terminalCompetition)await this.submission.submit(m.candidateId);}await this.refresh(true);}catch(error){this.onError(error);}finally{b.disabled=false;}};host.append(b);}this.taskPool?.renderPrevious(host);}
-  dispose(){clearInterval(this.outboxTimer);this.outbox?.stop();this.taskPool?.dispose();this.walletSetup?.dispose();this.rpcSettings?.dispose();this.rpcStep?.remove();this.financial.removeEventListener('change',this.factoryWalletChanged);super.dispose();}
+  dispose(){this.supplyStatus?.dispose();clearInterval(this.outboxTimer);this.outbox?.stop();this.taskPool?.dispose();this.walletSetup?.dispose();this.rpcSettings?.dispose();this.rpcStep?.remove();this.financial.removeEventListener('change',this.factoryWalletChanged);super.dispose();}
 }

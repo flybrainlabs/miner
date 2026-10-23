@@ -72,7 +72,18 @@ async function end(x){x.runner.stopNow();await x.runner.completion;assert(x.prim
  await start(x);assert.notEqual(x.runner.budget.sessionId,session);x.runner.meter.reset();await end(x);
  await new Promise(resolve=>setTimeout(resolve,2300));const old=reports.filter(r=>r.phase==='ended'&&r.sessionId===session);assert.equal(old.length,2);assert.deepEqual(old[0],old[1],'bounded retry retains the old session payload after a new start');
 }
-console.log('V2 coordinator paths: two Workers/focus, UI isolation, save failures, budgets, all-pass boundary, safe cross-round cancellation, stale events, reconnect and crash recovery from durable background prefixes passed (runtime faults simulated).');
+{
+ const x=setup();x.client.network.protocolVersion=4;await start(x);
+ globalThis.document.hidden=true;x.runner.visibility();
+ assert(x.runner.intent&&!x.runner.paused,'V4 retains the explicit session while hidden');
+ assert(x.runner.active.every(e=>!e.slot.runtime.controls.includes('pause')),'hidden V4 work receives no application pause');
+ let release,reads=0;x.client.sync=()=>{reads++;return new Promise(resolve=>release=()=>resolve({round:x.client.round}));};
+ globalThis.document.hidden=false;x.runner.visibility();x.runner.visibility();assert.equal(reads,1,'foreground revalidation is coalesced');
+ assert(x.runner.active.every(e=>!e.slot.runtime.controls.includes('pause')),'a foreground read does not interrupt running work');
+ x.runner.pauseNow('paused-by-user');release();await x.runner.resumeChecking;
+ await until(()=>x.runner.paused);assert.equal(x.runner.intent,false,'late revalidation cannot revoke a deliberate pause');await end(x);
+}
+console.log('V2 coordinator paths and V4 hidden-session/foreground-revalidation boundaries passed (runtime faults simulated).');
 {
  const x=setup();let busy=true,claims=0,released=0;
  x.client.reserveInput=async(r,input,sessionId)=>{claims++;return busy?false:{id:'lease-'+claims,sessionId,fence:'1'};};

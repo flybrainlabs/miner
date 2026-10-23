@@ -189,7 +189,14 @@ export class GoalSearchRunner {
   setThreads(value){this.pool.setRequested(value);const running=this.active.filter(e=>['running','resuming','pausing'].includes(e.slot.status));for(const e of running.slice(this.pool.requested)){e.slot.status='pausing';e.slot.runtime.control('pause');}this.pump();this.publish();}
   pauseAfter(){this.stopAfterRound=true;this.publish();}
   stopNow(){this.controlGeneration=(this.controlGeneration||0)+1;this.capacityWait=null;this.reconnecting=false;this.intent=false;this.paused=false;this.pauseReason='stopped';for(const e of this.active){e.cancelled=true;if(e.betweenTrials){e.betweenTrials();e.betweenTrials=null;}if(e.slot.status!=='saving')e.slot.runtime.control('cancel');}if(!this.active.length)this.finish();this.publish();}
-  visibility(){if(this.client.network.protocolVersion!==4){if(document.hidden&&this.running)this.pauseNow('hidden');return;}if(!document.hidden&&this.running&&this.intent){this.disconnected(new Error('Rechecking after page resume'),'network');this.client.sync().then(snapshot=>{this.syncRound(snapshot);this.pump();}).catch(error=>this.disconnected(error));}this.publish();}
+  visibility(){
+    if(this.client.network.protocolVersion!==4){if(document.hidden&&this.running)this.pauseNow('hidden');return;}
+    if(!document.hidden&&this.running&&this.intent&&!this.resumeChecking){
+      const generation=this.generation,client=this.client,current=()=>generation===this.generation&&client===this.client&&this.running&&this.intent;
+      this.resumeChecking=client.sync().then(snapshot=>{if(current()){this.syncRound(snapshot);this.pump();}}).catch(error=>{if(current())this.disconnected(error);}).finally(()=>this.resumeChecking=null);
+    }
+    this.publish();
+  }
   finish(){if(this.active.length)return;this.intent=false;this.budget.active(false);this.aggregate=null;this.state.update('execution',{phase:'complete',reason:this.pauseReason||this.phase,runningTaskId:null,tasksByExecution:[],aggregate:null,session:this.budget.summary()});this.resolveSession?.();this.resolveSession=null;}
   totals(){return {neurons:this.meter.total.neurons.toString(),synapses:this.meter.total.synapses.toString()};}
   sample(){this.meter.setStatus(this.paused?'paused':this.running?'running':'stopped');this.aggregate=this.paused||!this.active.length?null:this.meter.sample();}
