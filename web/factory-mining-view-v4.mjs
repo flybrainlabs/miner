@@ -1,3 +1,4 @@
+import {candidateProgressV4,renderTaskCompetitionV4,renderContinuousWaitV4,recoverWaitingMiningV4,refreshTaskHistoryV4} from './mining-progress-v4.mjs';
 import {GoalMiningView} from './goal-mining-view.mjs';
 import {deriveGoalUiState} from './goal-ui-state.mjs';
 import {retainedCandidateOutputs} from './pending-output.mjs';
@@ -12,7 +13,7 @@ import {TaskSupplyStatusV4} from './task-supply-status-v4.mjs';
 import {FactoryMiningClientV4,FactoryMiningContinuationV4,FactorySubmissionV4,factoryWalletAdapter} from '/assets/vendor/generated/factory-wallet-v4.mjs';
 const $=id=>document.getElementById(id);
 const atoms=n=>{const v=BigInt(n||0);return (v/100000000n).toString()+((v%100000000n)?'.'+(v%100000000n).toString().padStart(8,'0').replace(/0+$/,''):'');};
-Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model'],'contract-task-expired':['本轮已超时 · 可按合约规则接续','Task expired · contract recovery available'],'contract-result-ready':['已有通过验证的候选 · 可完成结算','Verified candidate ready · finalize the result'],'contract-task-ready':['下一项预设任务待开启','Next predefined task ready to open'],'recover-contract-task':['接续合约任务','Continue contract task'],'finalize-contract-result':['完成候选结算','Finalize verified result'],'contract-empty-window':['新承诺已截止 · 本轮暂无候选','Claims closed · no candidates this attempt']});
+Object.assign(texts,{'rpc-required':['请先设置 RPC','Set up your RPC first'],'configure-rpc':['设置 RPC','Set up RPC'],'checking-rpc':['正在验证 RPC…','Verifying RPC…'],'preparation-required':['请先准备本机模型','Prepare the model on this device'],'prepare-model':['构建模型','Build model'],'contract-task-expired':['本轮已超时 · 可按合约规则接续','Task expired · contract recovery available'],'contract-result-ready':['已有通过验证的候选 · 可完成结算','Verified candidate ready · finalize the result'],'contract-task-ready':['下一项任务待开启','Next task ready to open'],'recover-contract-task':['接续合约任务','Continue contract task'],'finalize-contract-result':['完成候选结算','Finalize verified result'],'contract-empty-window':['新承诺已截止 · 本轮暂无候选','Claims closed · no candidates this attempt']});
 Object.assign(texts,{'wait-and-continue':['等待并自动继续挖矿','Wait and continue mining'],'contract-auto-wait':['自动接续已开启 · 等待合约窗口','Automatic continuation active · waiting for contract window']});
 Object.assign(texts,{'science-mining-active':['科学挖矿正在运行','Scientific mining is running']});
 export class FactoryMiningViewV4 extends GoalMiningView {
@@ -66,10 +67,10 @@ export class FactoryMiningViewV4 extends GoalMiningView {
       this.rows=await this.store.list();this.pending=[];for(const c of this.taskPool?.contexts.values()||[{store:this.store,network:this.network,client:this.client}]){const retained=await retainedCandidateOutputs(c.network,c.store);for(const r of retained){r.executionContext={...c,outbox:this.outbox};this.pending.push(r);}}const outputs=new Map(this.pending.map(x=>[x.task.trialId,x]));for(const r of this.runner.pendingResults.values())outputs.set(r.task.trialId,r);this.pending=[...outputs.values()];
       if(reconcile){this.taskPool?.tick().catch(()=>{});this.outbox.tick().catch(()=>{});}
       if(reconcile&&this.client.online){
-        if(Date.now()-(this.historyAt||0)>15000||this.historyNext!==this.client.factory?.nextIndex){const previous=this.taskHistory||[],next=[],f=this.client.factory;for(let i=0;i<(f?.uploaded||0);i++){const saved=previous.find(t=>t.index===i);try{next.push(saved&&(saved.paid||saved.state===0&&i>=f.nextIndex)?saved:await this.client.reader.task(i));}catch{if(saved)next.push(saved);}}this.taskHistory=next;this.historyAt=Date.now();this.historyNext=f?.nextIndex;}
+        refreshTaskHistoryV4(this).catch(()=>{});
       }
       if(reconcile&&!this.continuation.pending)this.continuation.tick().catch(()=>{});
-      if(this.runner.capacityWait&&this.runner.intent&&this.walletSetup.canMine&&!this.pending.length){const reason=this.runner.capacityWait,estimate=await navigator.storage.estimate();if(reason==='MINING_WALLET_BALANCE'||reason==='outbox-capacity'&&this.outbox.canAccept(this.runner.reservation,this.runner.budget.reservedBytes)||reason==='browser-space'&&estimate.quota-estimate.usage>2*this.runner.reservation)this.runner.resumeCapacity();}
+      await recoverWaitingMiningV4(this);
       this.renderResults();this.render();
     }finally{this.refreshing=false;}
   }
@@ -78,6 +79,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     if(this.sciencePanel?.running)return {state:'science-mining-active',button:'science-mining-active',disabled:true,action:'none',pendingOutputs:0};
     const p=this.state.value.preparation,f=this.snapshot?.factory,walletSignedIn=!!this.adapter?.isSignedIn();
     const ui=deriveGoalUiState({network:this.network,online:this.client.online&&!!this.client.identity,snapshot:this.snapshot,serverNow:this.client.serverNow,preparation:p.phase,modelReady:this.runtime.ready,automaticPreparation:true,preparing:this.preparing,running:this.runner.running,paused:this.runner.paused,reason:this.runner.pauseReason,actionBusy:this.actionBusy||this.recovering,pendingOutputs:this.pending.length,walletRequired:true,walletConnected:!!this.financial.account,walletSignedIn,walletRestoring:['restoring','connecting'].includes(this.financial.connectionState)});
+    if(this.runner.running&&this.runner.intent&&this.runner.paused&&(this.runner.retryWait||this.runner.capacityWait))return {state:'waiting-next-goal',button:'pause-mining',disabled:false,action:'pause',pendingOutputs:this.pending.length};
     if(this.walletSetup&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused)&&(this.walletSetup.requiresUnlock||this.adapter.rpc.ready&&(!this.walletSetup.ready||this.runtime.ready&&!this.walletSetup.canMine)))return {state:'mining-wallet-required',button:'configure-mining-wallet',disabled:this.walletSetup.busy||!!this.actionBusy,action:'configure-mining-wallet',pendingOutputs:0};
     if(this.adapter&&!this.adapter.rpc.ready&&!this.pending.length&&!this.preparing&&!(this.runner.running&&!this.runner.paused))return {state:'rpc-required',button:this.adapter.rpc.busy?'checking-rpc':'configure-rpc',disabled:this.adapter.rpc.busy||!!this.actionBusy,action:'configure-rpc',pendingOutputs:0};
     const recovery=this.snapshot?.recovery;
@@ -131,15 +133,15 @@ export class FactoryMiningViewV4 extends GoalMiningView {
         $('miner-guidance').textContent+=' '+(remaining?say(`验证期限：${until}，约剩 ${minutes} 分钟。当前没有可分配的新计算；等待期间不创建提交 PDA。`,`Verification deadline: ${until}, about ${minutes} minutes remaining. No new computation is assigned now; waiting does not create a submission PDA.`):say('验证期限已过，正在核对可接续状态。','The verification deadline has passed; checking contract recovery.'));
       }
     }
-    if($('wallet-mining-round-budget'))$('wallet-mining-round-budget').textContent=t?say('本任务获胜解奖励：','Reward for this task’s winning solution: ')+atoms(t.descriptor.rewardAtoms)+' FBW':say('等待合约开放下一个预设任务','Waiting for the contract to open the next predefined task');
+    if($('wallet-mining-round-budget'))$('wallet-mining-round-budget').textContent=t?say('本任务获胜解奖励：','Reward for this task’s winning solution: ')+atoms(t.descriptor.rewardAtoms)+' FBW':say('等待下一项已资助任务开放','Waiting for the next funded task to open');
     const own=this.rows.find(m=>m.roundId===r?.roundId&&m.factoryV4?.submission);
-    if($('wallet-mining-round-status'))$('wallet-mining-round-status').textContent=own?.rewardPaid?say('获胜解已确认，奖励已到账','Winning solution confirmed; reward received'):own?.won?say('合约已确认获胜解，奖励结算中','Contract confirmed the winner; payment pending'):own?say(`节点完整重放 ${own.validVotes||0}/2`,`Complete node replay ${own.validVotes||0}/2`):say('由合约验收并自动开启下一任务','The contract accepts results and opens the successor');
-    $('miner-mode').textContent=say('合约预设任务 · 节点完整验证','Contract-defined tasks · full node verification');
+    if($('wallet-mining-round-status'))$('wallet-mining-round-status').textContent=own?.rewardPaid?say('获胜解已确认，奖励已到账','Winning solution confirmed; reward received'):own?.won?say('合约已确认获胜解，奖励结算中','Contract confirmed the winner; payment pending'):own?candidateProgressV4(own).title:say('由合约验收并自动开启下一任务','The contract accepts results and opens the successor');
+    $('miner-mode').textContent=say('自动供给任务 · 完整模型验证','Automatic task supply · complete-model verification');
     $('miner-current-difficulty').textContent=r?'R'+r.pre.requiredBackgrounds:'—';
-    $('miner-difficulty-state').textContent=say('生产器按已审核科学规则准备不同任务；验证节点完整重放。','Approved producers prepare distinct tasks within frozen scientific rules; nodes fully replay results.');
+    $('miner-difficulty-state').textContent=say('系统按需求准备任务，每项任务开放前完成校准、资助并固定规则；开放后规则保持不变。','Tasks are prepared as needed, calibrated and funded before opening. Each open task keeps its registered rules.');
     if(r){const a=document.createElement('a');a.href='https://explorer.solana.com/address/'+r.pre.taskAddress+'?cluster=devnet';a.target='_blank';a.rel='noopener noreferrer';a.textContent=say(`合约任务 ${r.pre.taskIndex+1} · 链上记录`,`Contract task ${r.pre.taskIndex+1} · chain record`);$('miner-target-round').replaceChildren(a);}
     if(this.factoryDeployment&&f)$('miner-target-details').textContent=JSON.stringify({factory:this.factoryDeployment.factory,catalogRoot:this.factoryDeployment.catalogRoot,taskIndex:t?.index,attempt:t?.attempt,rewardFBW:t?atoms(t.descriptor.rewardAtoms):null,requiredBackgrounds:r?.pre.requiredBackgrounds,windows:r?.goal.windows,deadlines:r?{commit:r.pre.claimDeadline,reveal:r.pre.revealDeadline,verification:r.pre.verificationDeadline}:null,source:'finalized Solana task accounts',frozenVerifierQuorum:'2 of 3 trusted keys; currently one operator'},null,2);
-    this.renderMainStages();this.renderCompetition();
+    this.renderMainStages();this.renderCompetition();renderContinuousWaitV4(this);
   }
   renderMainStages(){
     const ui=this.ui(),stage=this.walletSetup.requiresUnlock?'wallet':!this.adapter.rpc.ready?'rpc':'start';
@@ -150,16 +152,7 @@ export class FactoryMiningViewV4 extends GoalMiningView {
     if(!this.backgroundQueue){this.backgroundQueue=document.createElement('details');this.backgroundQueue.className='miner-background-queue';this.backgroundQueue.dataset.noI18n='';$('miner-stage-mining').append(this.backgroundQueue);}
     const queue=this.outbox?.snapshot(),summary=document.createElement('summary');summary.textContent=say('后台提交与结算','Background submission and settlement');const detail=document.createElement('p');detail.textContent=queue?say(`待处理 ${queue.pending} · 正在处理 ${queue.active} · ${(queue.bytes/1048576).toFixed(1)} MiB / ${(queue.maximumBytes/1048576).toFixed(0)} MiB`,`Pending ${queue.pending} · active ${queue.active} · ${(queue.bytes/1048576).toFixed(1)} MiB / ${(queue.maximumBytes/1048576).toFixed(0)} MiB`):'—';const note=document.createElement('p');note.textContent=say('已保存的合格结果在后台上传和对账；其他开放任务可继续计算。已到账余额只统计链上确认的实际余额。','Saved qualified results upload and reconcile in the background while other open tasks compute. Available balances count only confirmed assets.');this.backgroundQueue.replaceChildren(summary,detail,note);
   }
-  renderCompetition(){
-    const f=this.snapshot?.factory;if(!$('miner-competition-events'))return;
-    $('miner-network-rate').textContent='—';$('miner-network-rate-note').textContent=say('奖励根据合约确认的完整解发放。','Rewards follow complete solutions accepted by the contract.');
-    $('miner-network-statistics').textContent=f?say(`预设任务 ${f.count} · 已开启 ${f.nextIndex} · 当前 ${f.activeIndex===0xffffffff?'—':f.activeIndex+1}`,`Predefined tasks ${f.count} · opened ${f.nextIndex} · current ${f.activeIndex===0xffffffff?'—':f.activeIndex+1}`):this.adapter?.rpc.ready?say('读取链上任务状态','Reading chain task state'):say('请先完成 RPC 设置','Complete RPC setup first');
-    $('miner-supply-state').textContent=f?say(`冻结总预算 ${atoms(f.budget)} FBW · 当前预留 ${atoms(f.reserved)} · 待支付 ${atoms(f.acceptedUnpaid)} · 已支付 ${atoms(f.paid)}`,`Frozen budget ${atoms(f.budget)} FBW · reserved ${atoms(f.reserved)} · unpaid ${atoms(f.acceptedUnpaid)} · paid ${atoms(f.paid)}`):'';
-    $('miner-round-outcome').textContent=say('节点完整重放；合约检查 2/3 可信密钥后确认并推进。','Nodes fully replay; the contract confirms a 2/3 trusted quorum and advances.');
-    $('miner-network-stats-detail').textContent=f?JSON.stringify(f,(_,v)=>typeof v==='bigint'?String(v):v instanceof Uint8Array?[...v]:v,2):'{}';$('miner-competition-events').replaceChildren();
-    $('miner-own-candidates').textContent=this.rows.slice(0,5).map(m=>`${say('任务','Task')} ${m.round.pre.taskIndex+1} · ${short(m.candidateId)} · ${label(m.phase)} · ${m.validVotes||0}/2`).join('\n')||say('尚无提交','No submissions');$('miner-submit-stage').textContent=this.rows[0]?label(this.rows[0].phase):say('暂无提交','No submission');
-    $('miner-round-history').replaceChildren(...(this.taskHistory||[]).map(t=>{const p=document.createElement('p');p.textContent=say(`任务 ${t.index+1} · ${['预设','开放','已完成','失败'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · 已到账':''}`,`Task ${t.index+1} · ${['scheduled','open','solved','failed'][t.state]||'—'} · ${atoms(t.descriptor.rewardAtoms)} FBW${t.paid?' · paid':''}`);return p;}));$('miner-round-history-next').disabled=true;
-  }
+  renderCompetition(){renderTaskCompetitionV4(this);}
   renderResults(){super.renderResults();const host=$('miner-goal-result-list');if(!host)return;for(const m of this.rows.filter(x=>x.factoryV4&&x.sciencePassed&&!x.rewardPaid).slice(0,8)){const b=document.createElement('button');b.type='button';b.className='button button-ghost';b.textContent=m.won?say('领取已确认奖励','Claim confirmed reward'):m.phase==='valid'?say('完成合约裁决','Finalize verified solution'):say('核对 / 恢复原提交','Reconcile / resume original submission');b.onclick=async()=>{b.disabled=true;try{this.adapter.assertMiningAuthorization();if(m.won)await this.submission.pay(m);else if(m.phase==='valid')await this.submission.finalize(m);else{await this.submission.reconcile(m);if(!m.terminalCompetition)await this.submission.submit(m.candidateId);}await this.refresh(true);}catch(error){this.onError(error);}finally{b.disabled=false;}};host.append(b);}this.taskPool?.renderPrevious(host);}
   dispose(){this.supplyStatus?.dispose();clearInterval(this.outboxTimer);this.outbox?.stop();this.taskPool?.dispose();this.walletSetup?.dispose();this.rpcSettings?.dispose();this.rpcStep?.remove();this.financial.removeEventListener('change',this.factoryWalletChanged);super.dispose();}
 }

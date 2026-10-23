@@ -34,7 +34,7 @@ async function end(x){x.runner.stopNow();await x.runner.completion;assert(x.prim
 }
 {
  const x=setup({displayFailure:true});await start(x);const [a,b]=x.runner.active;a.slot.runtime.trace();b.slot.runtime.trace();x.runner.focus(a.id);x.runner.pauseNow();await until(()=>x.runner.paused);a.slot.runtime.complete(false);await until(()=>a.done);assert.equal(x.runner.focusedExecutionId,b.id);assert(x.seen.includes(b.id));assert.equal(a.traceMessages,undefined);assert.equal(x.saved.length,1);assert(x.primary.ready);assert(!b.done);
- x.runner.setThreads(1);await x.runner.resume({minutes:12,storageBytes:2e9});assert.equal(x.runner.budget.minutes,12);await until(()=>b.slot.status==='running');const received=x.live.length;for(let i=0;i<20;i++)x.runner.focus(b.id);assert.equal(b.traceMessages,undefined);assert.equal(b.slot.runtime.observation.on,true);b.slot.runtime.onLive({...b.slot.runtime.message(),executionId:'late-old'});assert.equal(x.live.length,received);await end(x);
+ x.runner.setThreads(1);await x.runner.resume({minutes:12,storageBytes:2e9});assert.equal(x.runner.budget.minutes,null);await until(()=>b.slot.status==='running');const received=x.live.length;for(let i=0;i<20;i++)x.runner.focus(b.id);assert.equal(b.traceMessages,undefined);assert.equal(b.slot.runtime.observation.on,true);b.slot.runtime.onLive({...b.slot.runtime.message(),executionId:'late-old'});assert.equal(x.live.length,received);await end(x);
 }
 {
  const x=setup({saveFailure:true});await start(x);x.runner.pauseNow();await until(()=>x.runner.paused);for(const e of x.runner.active)e.slot.runtime.complete(false);await until(()=>!x.runner.active.length);assert.equal(x.runner.pendingResults.size,2);assert.equal(x.runner.budget.reservedBytes,0);assert(x.runner.budget.stagingBytes>0,'retained staging consumes the common budget');assert.equal(x.runner.budget.savedBytes,0);await end(x);
@@ -108,6 +108,32 @@ console.log('Recovered first passing background resumes the same candidate/sessi
  await x.runner.start({minutes:10,storageBytes:2e9});await until(()=>x.runner.paused);assert.equal(x.runner.pauseReason,'network');assert.equal(errors.length,1);assert.equal(errors[0].code,'GATEWAY_RETRY');assert.equal(x.runner.active.length,0);assert.equal(x.saved.length,0);assert(!x.primary.data,'admission failure cannot dispatch a Worker');assert.equal(x.rows.size,1,'candidate recovery metadata is retained');const candidate=[...x.rows.keys()][0];assert.equal(x.runner.resumable[0].candidateId,candidate);x.runner.financial.reportAttempt=async()=>{};await x.runner.resume();await until(()=>x.runner.active.length===2&&x.runner.active.every(e=>e.slot.runtime.data));assert.equal(x.runner.active[0].meta.candidateId,candidate,'explicit retry dispatches the selected candidate instead of skipping its input');await end(x);
 }
 console.log('Gateway admission faults retain candidate metadata, surface diagnostics and never masquerade as rent-credit failure.');
+
+{
+ const x=setup();await x.runner.start({minutes:.000001,count:1,stopAfterRound:true});
+ await until(()=>x.runner.active.length===2&&x.runner.active.every(e=>e.slot.runtime.data));
+ x.runner.budget.activeMs=86400000;assert.equal(x.runner.budget.limit,null,'elapsed time cannot stop mining');
+ const original=x.client.round.roundId;x.runner.roundEvent({kind:'ROUND_FINALIZED',roundId:original});
+ x.client.round=null;x.runner.syncRound({round:null});await until(()=>!x.runner.active.length);
+ assert(x.runner.running&&x.runner.intent&&!x.runner.paused,'round completion keeps participation even with old stop/count options');
+ const next=structuredClone(vector.round);next.roundId='e'.repeat(64);next.pre.claimDeadline=20000;x.client.round=next;x.runner.syncRound({round:next});
+ await until(()=>x.runner.active.length===2&&x.runner.active.every(e=>e.slot.runtime.data.task.roundId===next.roundId));await end(x);
+}
+{
+ const x=setup();await start(x);const original=x.runner.active[0];
+ original.slot.runtime.reject(new Error('Temporary Worker failure'));await until(()=>original.done&&x.runner.retryWait);
+ assert(x.runner.intent,'a retryable runtime fault retains the explicit Start');
+ x.runner.retryAt=0;x.runner.retryWaiting();await x.runner.retrying;
+ await until(()=>x.runner.active.some(e=>e.meta.candidateId===original.meta.candidateId&&e.slot.runtime.data));
+ assert(x.runner.running&&!x.runner.paused&&x.runner.intent,'the saved candidate resumes after model restoration without another Start');await end(x);
+}
+{
+ const x=setup();await start(x);x.runner.waitRetry('temporary-network');let release;
+ x.client.sync=()=>new Promise(resolve=>release=()=>resolve({round:x.client.round}));x.runner.retryAt=0;x.runner.retryWaiting();
+ await until(()=>!!release);x.runner.pauseNow();release();await x.runner.retrying;
+ assert(!x.runner.intent,'manual Pause cancels an in-flight automatic retry');assert(x.runner.paused);await end(x);
+}
+console.log('Continuous sessions ignore time/count/round-stop options, automatically recover a Worker, and keep manual Pause authoritative.');
 {
  const x=setup(),errors=[];let admissions=0;const scope={wallet:'fixture-wallet',grant:'fixture-grant',generation:'1'};x.runner.financial={account:{address:'fixture-wallet'},generation:1,login:{expiresAt:Math.floor(Date.now()/1000)+3600},requireFunding:async()=>{if(++admissions===1)return scope;throw Object.assign(new Error('Wallet RPC rate limited'),{code:'RPC_RATE_LIMITED'});},reportAttempt:async()=>{}};x.runner.onError=e=>errors.push(e);
  await x.runner.start({minutes:10,storageBytes:2e9});await until(()=>x.runner.paused);assert.equal(x.runner.pauseReason,'network');assert.equal(errors[0].code,'RPC_RATE_LIMITED');assert(!x.primary.data);assert.equal(x.saved.length,0);const meta=[...x.rows.values()][0],input=structuredClone(meta.input);assert.equal(x.runner.resumable[0].candidateId,meta.candidateId);

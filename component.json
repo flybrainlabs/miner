@@ -169,7 +169,9 @@
     "web/mining-continuity-v4.mjs": "web/mining-continuity-v4.mjs",
     "web/task-supply-status-v4.mjs": "web/task-supply-status-v4.mjs",
     "web/task-supply-page-v4.mjs": "web/task-supply-page-v4.mjs",
-    "tests/task_supply_status_v4.mjs": "tests/task_supply_status_v4.mjs"
+    "tests/task_supply_status_v4.mjs": "tests/task_supply_status_v4.mjs",
+    "web/mining-progress-v4.mjs": "web/mining-progress-v4.mjs",
+    "tests/mining_progress_v4.mjs": "tests/mining_progress_v4.mjs"
   },
   "project": "flybrainlabs"
 }
